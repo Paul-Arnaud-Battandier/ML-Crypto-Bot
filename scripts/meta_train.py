@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import classification_report, precision_score
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -15,61 +14,56 @@ def train_meta_model():
     
     print(f"Taille du dataset : {len(df)} trades à analyser.")
     
-    # Validation croisée purgée (on garde les bonnes habitudes)
     tscv = TimeSeriesSplit(n_splits=5, gap=12)
-    
-    # Le Random Forest : on le veut robuste pour ne pas overfitter le bruit
     meta_model = RandomForestClassifier(
-        n_estimators=200,      # On double le nombre d'arbres pour lisser les probabilités
-        max_depth=5,           # On lui donne un tout petit peu plus de mémoire
-        class_weight='balanced',
-        random_state=42,
-        n_jobs=-1
+        n_estimators=200, max_depth=5, class_weight='balanced', random_state=42, n_jobs=-1
     )
     
-    precisions = []
-        
-    # On va stocker les résultats pour différents seuils d'exigence
     thresholds = [0.50, 0.52, 0.54, 0.56, 0.58, 0.60]
-    results = {t: {'precisions': [], 'nb_trades': []} for t in thresholds}
+    
+    # Nouveau dictionnaire pour accumuler les VRAIS chiffres globaux
+    results = {t: {'total_trades': 0, 'vrais_gagnants': 0} for t in thresholds}
     
     for train_idx, test_idx in tscv.split(X):
         X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
         y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
         
         meta_model.fit(X_train, y_train)
-        
-        # Au lieu de .predict(), on demande les probabilités brutes !
         meta_probas = meta_model.predict_proba(X_test)[:, 1]
         
-        # On teste nos différents seuils d'exigence
         for t in thresholds:
-            # Si proba > seuil, on trade (1), sinon on annule (0)
             custom_preds = (meta_probas > t).astype(int)
             
-            nb_trades_pris = sum(custom_preds)
-            results[t]['nb_trades'].append(nb_trades_pris)
+            # On compte mathématiquement les gagnants et les trades pris sur CE fold
+            trades_pris = sum(custom_preds == 1)
+            gagnants = sum((custom_preds == 1) & (y_test == 1))
             
-            if nb_trades_pris > 0:
-                prec = precision_score(y_test, custom_preds)
-                results[t]['precisions'].append(prec)
-            else:
-                results[t]['precisions'].append(0.0)
+            # On les ajoute au grand total
+            results[t]['total_trades'] += trades_pris
+            results[t]['vrais_gagnants'] += gagnants
 
-    print("\n📊 --- ANALYSE DES SEUILS DE CONFIANCE ---")
-    print("Rappel : Il nous faut > 40.0% de précision pour être rentable (Ratio 1.5:1).\n")
+    print("\n📊 --- ANALYSE GLOBALE DES SEUILS (VRAIE PRÉCISION) ---")
+    print("Rappel théorique : > 33.0% pour Break-even SANS frais (Ratio 2:1).")
+    print("Objectif réel    : > 36.0% pour être RENTABLE AVEC frais.\n")
     
     for t in thresholds:
-        mean_prec = np.mean(results[t]['precisions']) * 100
-        mean_trades = np.mean(results[t]['nb_trades'])
+        total_trades = results[t]['total_trades']
+        gagnants = results[t]['vrais_gagnants']
         
-        # Un peu de formatage visuel pour voir les gagnants
-        if mean_prec > 40.0:
-            etat = "✅ RENTABLE"
+        if total_trades > 0:
+            precision_reelle = (gagnants / total_trades) * 100
+        else:
+            precision_reelle = 0.0
+            
+        # L'analyse implacable
+        if precision_reelle > 36.0:
+            etat = "✅ RENTABLE (Survit aux frais)"
+        elif precision_reelle > 33.0:
+            etat = "⚠️ BREAK-EVEN (Tué par les frais)"
         else:
             etat = "❌ PERTE"
             
-        print(f"Seuil {t*100}% -> Précision: {mean_prec:.2f}% | Trades moyens/fold: {mean_trades:.0f} | {etat}")
+        print(f"Seuil {t*100}% -> Vraie Précision: {precision_reelle:.2f}% | Trades totaux: {total_trades} | {etat}")
         
 if __name__ == "__main__":
     train_meta_model()

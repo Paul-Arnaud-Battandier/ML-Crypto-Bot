@@ -80,14 +80,15 @@ if __name__ == "__main__":
     
     # 2. Définition des "Trade Events"
     # On dit au bot : "Ne trade que quand tu es sûr à plus de 50% que ça va monter"
-    seuil_confiance = 0.50
+    seuil_confiance = 0.52
     events = cv_probas[cv_probas > seuil_confiance].index
     print(f"\n🎯 Nombre de signaux d'achat détectés : {len(events)}")
     
     # 3. Le Crash-Test : La Triple Barrière
     print("🚧 Application de la Triple Barrière Dynamique...")
     # On met un Profit Taking à 1.5x la Volatilité, et un Stop Loss à 1x la Volatilité (Ratio 1.5:1)
-    meta_labels = apply_triple_barrier(df, events, pt_vol_mult=1.5, sl_vol_mult=1.0, time_limit=6)
+    # Ratio 1:1 avec plus d'oxygène, et on laisse 48h au trade (12 bougies de 4H)
+    meta_labels = apply_triple_barrier(df, events, pt_vol_mult=3.0, sl_vol_mult=1.5, time_limit=18)
 
     # 4. Analyse et Synthèse
     print("\n📊 Résultats des trades simulés :")
