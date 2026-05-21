@@ -3,63 +3,41 @@ import numpy as np
 import xgboost as xgb
 from sklearn.model_selection import TimeSeriesSplit
 
-def apply_triple_barrier(df, events, pt_vol_mult=1.0, sl_vol_mult=1.0, time_limit=6):
-    labels = pd.Series(index=events, dtype=float)
+def apply_fixed_horizon(df, events, horizon=2, fee_hurdle=0.002):
+    """
+    Cible Point-à-Point : Regarde uniquement le prix à t + horizon.
+    Ignore totalement ce qui se passe entre les deux (Pas de Stop Loss, pas de Take Profit).
     
-    # --- NOS NOUVEAUX COMPTEURS ---
-    stats = {'TP': 0, 'SL': 0, 'TIME_POS': 0, 'TIME_NEG': 0}
+    - horizon : Nombre de bougies (2 bougies = 8 heures, donc de 16h à minuit)
+    - fee_hurdle : La barrière des frais (0.002 = 0.2% pour couvrir l'aller-retour)
+    """
+    labels = pd.Series(index=events, dtype=float)
+    stats = {'GAGNANT': 0, 'PERDANT': 0}
     
     for t_event in events:
         start_price = df.loc[t_event, 'close']
-        volatility = df.loc[t_event, 'volatility_24h'] 
-        
-        # Inversion pour le Short : TP en bas, SL en haut
-        take_profit = start_price - (start_price * volatility * pt_vol_mult) 
-        stop_loss = start_price + (start_price * volatility * sl_vol_mult)
-        
         start_idx = df.index.get_loc(t_event)
-        end_idx = min(start_idx + time_limit + 1, len(df))
-        future_window = df.iloc[start_idx+1 : end_idx]
         
-        touched = False
-        
-        for current_time, row in future_window.iterrows():
-            # --- ATTENTION : TEST INVERSÉ (SHORT) ---
-            if row['high'] >= stop_loss:  # Si le prix MONTE, on touche le Stop Loss (Perte)
-                labels[t_event] = 0
-                stats['SL'] += 1
-                touched = True
-                break
-            elif row['low'] <= take_profit: # Si le prix BAISSE, on touche le Take Profit (Gain)
-                labels[t_event] = 1
-                stats['TP'] += 1
-                touched = True
-                break
-                
-        # Si la boucle se termine et que rien n'a été touché : Barrière Temps !
-        if not touched:
-            final_price = future_window.iloc[-1]['close'] if len(future_window) > 0 else start_price
+        # On vérifie qu'on a bien accès à la bougie de minuit
+        if start_idx + horizon < len(df):
+            final_price = df.iloc[start_idx + horizon]['close']
             
-            if final_price > start_price:
-                # Expiré avec un petit profit ! (Mais on le laisse à 0 pour le ML 
-                # car il n'a pas atteint notre vrai objectif de Take Profit)
-                labels[t_event] = 0 
-                stats['TIME_POS'] += 1
+            # Pour gagner, le prix final doit battre le prix initial + les frais
+            if final_price > start_price * (1 + fee_hurdle):
+                labels[t_event] = 1.0
+                stats['GAGNANT'] += 1
             else:
-                # Expiré en perte
-                labels[t_event] = 0
-                stats['TIME_NEG'] += 1
-                
-    # --- AFFICHAGE DU RAPPORT D'AUTOPSIE ---
-    print("\n🔍 DÉTAIL DES SORTIES DE TRADES :")
-    print(f"-> 🟢 Touché Take Profit (TP)     : {stats['TP']}")
-    print(f"-> 🔴 Touché Stop Loss (SL)       : {stats['SL']}")
-    print(f"-> ⏱️ Expiré Temps (Gain partiel) : {stats['TIME_POS']}")
-    print(f"-> ⏱️ Expiré Temps (Perte légère) : {stats['TIME_NEG']}")
+                labels[t_event] = 0.0
+                stats['PERDANT'] += 1
+        else:
+            labels[t_event] = np.nan
+            
+    print("\n🔍 DÉTAIL DU FIXED HORIZON (16h00 -> 00h00) :")
+    print(f"-> 🟢 Clôture en Gain Net (Frais payés) : {stats['GAGNANT']}")
+    print(f"-> 🔴 Clôture en Perte                : {stats['PERDANT']}")
     print("-" * 40)
     
-    return labels
-
+    return labels.dropna()
 
 
 if __name__ == "__main__":
@@ -104,11 +82,10 @@ if __name__ == "__main__":
     print(f"🛡️ Signaux conservés pour le trade du soir : {len(events)}")
     # --------------------------------------------------
     
-    # 3. Le Crash-Test : La Triple Barrière (Version Sprint 8H)
-    print("🚧 Application de la Triple Barrière Dynamique (Barrières rapprochées)...")
-    
-    # Ancien TP = 1.5 / Ancien SL = 1.0 (Pour 24h)
-    meta_labels = apply_triple_barrier(df, events, pt_vol_mult=0.75, sl_vol_mult=0.5, time_limit=2)
+    # 3. Le Crash-Test : Fixed Time Horizon
+    print("🚧 Application de la Cible Point-à-Point (00h00)...")
+    # horizon=2 (pour avancer de deux bougies de 4h)
+    meta_labels = apply_fixed_horizon(df, events, horizon=2, fee_hurdle=0.002)
 
     # 4. Analyse et Synthèse
     print("\n📊 Résultats des trades simulés :")
