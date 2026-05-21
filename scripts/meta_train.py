@@ -43,8 +43,8 @@ def train_meta_model():
             results[t]['vrais_gagnants'] += gagnants
 
     print("\n📊 --- ANALYSE GLOBALE DES SEUILS (VRAIE PRÉCISION) ---")
-    print("Rappel théorique : > 33.0% pour Break-even SANS frais (Ratio 2:1).")
-    print("Objectif réel    : > 36.0% pour être RENTABLE AVEC frais.\n")
+    print("Rappel théorique : > 40.0% pour Break-even SANS frais (Ratio 1.5:1).")
+    print("Objectif réel    : > 45.0% pour être RENTABLE AVEC frais.\n")
     
     for t in thresholds:
         total_trades = results[t]['total_trades']
@@ -55,15 +55,15 @@ def train_meta_model():
         else:
             precision_reelle = 0.0
             
-        # L'analyse implacable
-        if precision_reelle > 36.0:
+        # L'analyse implacable corrigée (Ratio 1.5:1)
+        if precision_reelle > 45.0:
             etat = "✅ RENTABLE (Survit aux frais)"
-        elif precision_reelle > 33.0:
+        elif precision_reelle > 40.0:
             etat = "⚠️ BREAK-EVEN (Tué par les frais)"
         else:
             etat = "❌ PERTE"
             
-        print(f"Seuil {t*100}% -> Vraie Précision: {precision_reelle:.2f}% | Trades totaux: {total_trades} | {etat}")
+        print(f"Seuil {t*100:.0f}% -> Vraie Précision: {precision_reelle:.2f}% | Trades totaux: {total_trades} | {etat}")
         
 if __name__ == "__main__":
     train_meta_model()
