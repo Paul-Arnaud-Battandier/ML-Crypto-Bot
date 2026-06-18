@@ -4,11 +4,12 @@ import time
 
 def fetch_binance_1m_data(symbol="BTCUSDT", loops=1):
     """
-    Télécharge les données depuis l'API publique 'Vision' de Binance 
-    (immunisée contre la plupart des blocages IP Cloud).
+    Télécharge les données depuis l'API Binance Futures (fapi).
+    Le contournement parfait contre les blocages d'IP partagées des hébergeurs Cloud,
+    car les serveurs Futures ont des quotas séparés du marché Spot.
     """
-    # L'URL magique pour les serveurs Cloud :
-    url = "https://data-api.binance.vision/api/v3/klines"
+    # L'URL "Porte de derrière" (Binance Futures)
+    url = "https://fapi.binance.com/fapi/v1/klines"
     
     all_klines = []
     end_time = None
@@ -22,23 +23,28 @@ def fetch_binance_1m_data(symbol="BTCUSDT", loops=1):
         if end_time:
             params["endTime"] = end_time
             
-        response = requests.get(url, params=params, timeout=10)
-        data = response.json()
-        
-        # --- BOUCLIER CLOUD ---
-        # Si Binance renvoie un dictionnaire (une erreur) au lieu d'une liste
-        if isinstance(data, dict):
-            raise ValueError(f"Binance a bloqué la requête. Message API : {data}")
-        # ----------------------
-        
-        if not data:
-            break
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            data = response.json()
             
-        all_klines = data + all_klines
-        end_time = data[0][0] - 1
-        time.sleep(0.1)
+            # --- BOUCLIER CLOUD ---
+            if isinstance(data, dict):
+                raise ValueError(f"Blocage Binance Futures détecté : {data}")
+            # ----------------------
+            
+            if not data:
+                break
+                
+            all_klines = data + all_klines
+            end_time = data[0][0] - 1
+            time.sleep(0.1)
+            
+        except Exception as e:
+            print(f"⚠️ Avertissement API : {e}")
+            # Si ça échoue, on lève une exception pour que le main.py 
+            # annule le trade de cette minute sans faire crasher le bot entier.
+            raise e
         
-    # Formatage classique du DataFrame
     columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 
                'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 
                'taker_buy_quote_asset_volume', 'ignore']
