@@ -76,8 +76,9 @@ def run_trading_bot():
     while True:
         now = datetime.datetime.now()
         
-        if now.second == 5:
-            print(f"\n⏰ {now.strftime('%H:%M:%S')} - Analyse en cours...")
+        # Le bot ne s'active qu'au début exact d'une bougie de 5 minutes (ex: 18:00:05, 18:05:05)
+        if now.minute % 5 == 0 and now.second == 5:
+            print(f"\n⏰ {now.strftime('%H:%M:%S')} - Mode SNIPER activé. Analyse en cours...")
             
             proba_up = get_current_oracle_prediction(model, feature_columns)
             market_data = get_live_btc_5m_market()
