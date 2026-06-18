@@ -88,8 +88,8 @@ def run_trading_bot():
                 ecart = round(oracle_prob_pct - poly_price_pct, 2)
                 
                 decision = "NEUTRAL"
-                if ecart > 5.0: decision = "BUY_YES"
-                elif ecart < -5.0: decision = "BUY_NO"
+                if ecart > 5.0: decision = "BUY_UP"
+                elif ecart < -5.0: decision = "BUY_DOWN"
                 
                 print(f"-> ML: {oracle_prob_pct}% | Polymarket: {poly_price_pct}% | Edge: {ecart}% | Action: {decision}")
                 

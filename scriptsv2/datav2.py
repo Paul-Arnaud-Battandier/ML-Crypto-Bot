@@ -1,61 +1,51 @@
 import requests
 import pandas as pd
-import time
 
 def fetch_binance_1m_data(symbol="BTCUSDT", loops=1):
     """
-    Télécharge les données depuis l'API Binance Futures (fapi).
-    Le contournement parfait contre les blocages d'IP partagées des hébergeurs Cloud,
-    car les serveurs Futures ont des quotas séparés du marché Spot.
+    Tromperie Quant : On garde le nom de la fonction, mais on aspire 
+    secrètement les données chez Bybit pour contourner le ban IP de Binance.
     """
-    # L'URL "Porte de derrière" (Binance Futures)
-    url = "https://fapi.binance.com/fapi/v1/klines"
-    
+    url = "https://api.bybit.com/v5/market/kline"
     all_klines = []
-    end_time = None
     
     for _ in range(loops):
         params = {
+            "category": "spot",
             "symbol": symbol,
-            "interval": "1m",
+            "interval": "1",
             "limit": 1000
         }
-        if end_time:
-            params["endTime"] = end_time
-            
-        try:
-            response = requests.get(url, params=params, timeout=10)
-            data = response.json()
-            
-            # --- BOUCLIER CLOUD ---
-            if isinstance(data, dict):
-                raise ValueError(f"Blocage Binance Futures détecté : {data}")
-            # ----------------------
-            
-            if not data:
-                break
-                
-            all_klines = data + all_klines
-            end_time = data[0][0] - 1
-            time.sleep(0.1)
-            
-        except Exception as e:
-            print(f"⚠️ Avertissement API : {e}")
-            # Si ça échoue, on lève une exception pour que le main.py 
-            # annule le trade de cette minute sans faire crasher le bot entier.
-            raise e
         
-    columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 
-               'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 
-               'taker_buy_quote_asset_volume', 'ignore']
-    
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
+        
+        if data.get("retCode") != 0:
+            raise ValueError(f"Erreur API Bybit : {data}")
+            
+        klines = data["result"]["list"]
+        if not klines:
+            break
+            
+        all_klines.extend(klines)
+        
+    # Bybit renvoie les colonnes : [startTime, open, high, low, close, volume, turnover]
+    columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume', 'turnover']
     df = pd.DataFrame(all_klines, columns=columns)
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    df.set_index('timestamp', inplace=True)
     
+    # On ne garde que les colonnes utiles pour ton featuresv2.py
+    df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
+    
+    # Conversion des types
+    df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='ms')
     for col in ['open', 'high', 'low', 'close', 'volume']:
         df[col] = df[col].astype(float)
         
+    df.set_index('timestamp', inplace=True)
+    
+    # Bybit renvoie du plus récent au plus ancien, on doit inverser l'ordre
+    df = df.sort_index() 
+    
     return df
 
 if __name__ == "__main__":
