@@ -1,63 +1,55 @@
-import pandas as pd
 import requests
+import pandas as pd
 import time
 
-def fetch_binance_1m_data(symbol="BTCUSDT", limit=1000, loops=10):
+def fetch_binance_1m_data(symbol="BTCUSDT", loops=1):
     """
-    Récupère l'historique 1-minute sur Binance.
-    Par défaut : 10 boucles de 1000 bougies = 10 000 minutes (~7 jours).
+    Télécharge les données depuis l'API publique 'Vision' de Binance 
+    (immunisée contre la plupart des blocages IP Cloud).
     """
-    print(f"⏳ Téléchargement des données {symbol} (1 minute)...")
-    url = "https://api.binance.com/api/v3/klines"
-    all_data = []
+    # L'URL magique pour les serveurs Cloud :
+    url = "https://data-api.binance.vision/api/v3/klines"
+    
+    all_klines = []
     end_time = None
     
-    for i in range(loops):
+    for _ in range(loops):
         params = {
             "symbol": symbol,
             "interval": "1m",
-            "limit": limit
+            "limit": 1000
         }
-        # Si on a déjà récupéré des données, on demande à l'API de reculer dans le temps
         if end_time:
             params["endTime"] = end_time
             
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=10)
         data = response.json()
+        
+        # --- BOUCLIER CLOUD ---
+        # Si Binance renvoie un dictionnaire (une erreur) au lieu d'une liste
+        if isinstance(data, dict):
+            raise ValueError(f"Binance a bloqué la requête. Message API : {data}")
+        # ----------------------
         
         if not data:
             break
             
-        # On ajoute les nouvelles données au début de notre liste
-        all_data = data + all_data 
+        all_klines = data + all_klines
+        end_time = data[0][0] - 1
+        time.sleep(0.1)
         
-        # Le nouveau point d'arrêt (end_time) est juste avant la plus vieille bougie récupérée
-        end_time = data[0][0] - 1 
-        
-        # On fait une pause de 0.5s pour ne pas se faire bannir par l'API Binance
-        time.sleep(0.5) 
-        
-    # Formatage propre
-    columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume', 
-               'close_time', 'quote_asset_volume', 'number_of_trades', 
-               'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore']
+    # Formatage classique du DataFrame
+    columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 
+               'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 
+               'taker_buy_quote_asset_volume', 'ignore']
     
-    df = pd.DataFrame(all_data, columns=columns)
-    
-    # Gestion du temps : Binance renvoie des millisecondes (unit='ms')
+    df = pd.DataFrame(all_klines, columns=columns)
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    df = df.set_index('timestamp')
+    df.set_index('timestamp', inplace=True)
     
-    # On ne garde que l'essentiel et on force le format nombre
-    df = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
-    
-    # Sécurité anti-doublons
-    df = df[~df.index.duplicated(keep='first')].sort_index()
-    
-    print(f"✅ Succès : {len(df)} lignes récupérées.")
-    print(f"📅 Du : {df.index.min()}")
-    print(f"📅 Au : {df.index.max()}")
-    
+    for col in ['open', 'high', 'low', 'close', 'volume']:
+        df[col] = df[col].astype(float)
+        
     return df
 
 if __name__ == "__main__":
