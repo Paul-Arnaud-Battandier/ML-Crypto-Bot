@@ -49,3 +49,31 @@ Phase 1: Primary Model (Directional Prediction)
 - Meta-Model Final Precision: 55.14% (Profitable).
 - Expectancy: Positive (+$37.5 net per trade assuming $100 risk).
 - Position Sizing Strategy: Dynamic capital allocation based on Meta-Model output probability.
+
+
+Backtest :
+The models combined do not make a positive return
+Pivot -> 5 minutes BTC Up or Down on Polymarket
+
+
+PIVOT :
+Research & Strategy (V2 - Polymarket Pivot):
+- Asset: BTC Up/Down 5-Min (Polymarket).
+- Market Characteristics: Prediction market based on real-time Oracle resolution. Central Limit Order Book (CLOB) on Polygon blockchain.
+- Trading Horizon: Scalping / Ultra-Short Term (5 minutes).
+- Underlying Drivers: Microstructure (Binance 1m), Order Book Imbalance (Polymarket), Short-term momentum.
+- Execution & Capital: Paper Trading (CV Project). 
+- Transaction Costs: Polymarket Dynamic Fees. Taker (up to ~1.5%-2.0% near 50/50 odds) | Maker (0% + potential rebates).
+- Execution Strategy: STRICTLY MAKER. We must provide liquidity using Limit Orders to avoid the Taker fee drag.
+- Primary Quantitative Risks: API Latency, Execution Risk (Order not filled as Maker), Overfitting on micro-noise.
+
+Architecture (Advanced AFML):
+Phase 1: Primary Model (The Oracle)
+- Data: Binance 1m OHLCV.
+- Role: Predict the raw mathematical probability of BTC going UP in exactly 5 minutes.
+- Target: 1 (Close_t+5 > Close_t), 0 (otherwise).
+
+Phase 2: Meta-Labeling (Risk & Sizing)
+- Data: Polymarket Order Book (YES/NO share prices) + Primary Model Probability.
+- Role: Compare the model's predicted probability against the market's implied probability (Share price). 
+- Target: 1 if Expected Value is positive AND trade executes profitably as Maker, 0 otherwise.
