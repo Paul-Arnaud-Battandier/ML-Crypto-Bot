@@ -2,9 +2,9 @@ import time
 import datetime
 import lightgbm as lgb
 import pandas as pd
-from datav2 import fetch_binance_1m_data
-from featuresv2 import create_features
-from polymarket_data import get_live_btc_5m_market
+from scriptsv2.datav2 import fetch_binance_1m_data
+from scriptsv2.featuresv2 import create_features
+from scriptsv2.polymarket_data import get_live_btc_5m_market
 import os
 import csv
 import warnings
