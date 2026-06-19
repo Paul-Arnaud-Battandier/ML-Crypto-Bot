@@ -1,0 +1,111 @@
+{
+  "metrics": {
+    "oos_accuracy": 0.9732997481108312,
+    "oos_auc": 0.8835257228481047,
+    "oos_precision": 0.9886539453326457,
+    "oos_recall": 0.9840862422997947,
+    "oos_logloss": 0.2552043943622751,
+    "trade_rate": 0.9768261964735516,
+    "n_trades": 1939,
+    "n_samples": 1985
+  },
+  "feature_cols": [
+    "proba_lgbm",
+    "entropy_15m",
+    "vol_ratio",
+    "ofi_15m",
+    "ofi_5m",
+    "vwap_dev_15m",
+    "rsi_14",
+    "autocorr_1",
+    "vol_gk",
+    "tf15_ret_15m_bar",
+    "tf5_roc_3bar_5m",
+    "poly_yes_prob",
+    "poly_no_prob",
+    "poly_skew",
+    "poly_spread_yes",
+    "poly_spread_no",
+    "poly_imb_yes",
+    "poly_imb_no",
+    "poly_net_imb"
+  ],
+  "importances": [
+    {
+      "feature": "proba_lgbm",
+      "importance": 0.44411087650838615
+    },
+    {
+      "feature": "tf15_ret_15m_bar",
+      "importance": 0.09807071178123045
+    },
+    {
+      "feature": "vwap_dev_15m",
+      "importance": 0.06986321773935356
+    },
+    {
+      "feature": "ofi_5m",
+      "importance": 0.06060968189182265
+    },
+    {
+      "feature": "vol_ratio",
+      "importance": 0.058580601691138524
+    },
+    {
+      "feature": "autocorr_1",
+      "importance": 0.053727655662822775
+    },
+    {
+      "feature": "tf5_roc_3bar_5m",
+      "importance": 0.05003258734513769
+    },
+    {
+      "feature": "rsi_14",
+      "importance": 0.048200969099644025
+    },
+    {
+      "feature": "ofi_15m",
+      "importance": 0.04804242628180077
+    },
+    {
+      "feature": "vol_gk",
+      "importance": 0.0369226487674857
+    },
+    {
+      "feature": "entropy_15m",
+      "importance": 0.031838623231177664
+    },
+    {
+      "feature": "poly_yes_prob",
+      "importance": 0.0
+    },
+    {
+      "feature": "poly_no_prob",
+      "importance": 0.0
+    },
+    {
+      "feature": "poly_skew",
+      "importance": 0.0
+    },
+    {
+      "feature": "poly_spread_yes",
+      "importance": 0.0
+    },
+    {
+      "feature": "poly_spread_no",
+      "importance": 0.0
+    },
+    {
+      "feature": "poly_imb_yes",
+      "importance": 0.0
+    },
+    {
+      "feature": "poly_imb_no",
+      "importance": 0.0
+    },
+    {
+      "feature": "poly_net_imb",
+      "importance": 0.0
+    }
+  ]
+}

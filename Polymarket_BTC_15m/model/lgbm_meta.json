@@ -1,0 +1,89 @@
+{
+  "feature_cols": [
+    "ret_1m",
+    "ret_3m",
+    "ret_5m",
+    "ret_10m",
+    "ret_15m",
+    "vol_5m",
+    "vol_15m",
+    "vol_30m",
+    "vol_ratio",
+    "atr_14",
+    "vol_gk",
+    "roc_3m",
+    "roc_5m",
+    "roc_10m",
+    "roc_15m",
+    "roc_30m",
+    "rsi_14",
+    "autocorr_1",
+    "autocorr_5",
+    "vol_zscore",
+    "vol_ratio_5_15",
+    "vwap_dev_15m",
+    "ofi_15m",
+    "ofi_5m",
+    "entropy_15m",
+    "tf5_ret_5m_bar",
+    "tf5_vol_5m_bar",
+    "tf5_roc_3bar_5m",
+    "tf5_roc_6bar_5m",
+    "tf15_ret_15m_bar",
+    "tf15_ret_15m_bar2",
+    "tf15_vol_15m_bar",
+    "tf15_high_low_15m"
+  ],
+  "metrics": {
+    "oos_accuracy": 0.705793450881612,
+    "oos_auc": 0.7768720940306697,
+    "oos_logloss": 0.5617402693164677,
+    "oos_brier": 0.19014530437879174,
+    "n_samples": 1985,
+    "n_features": 33,
+    "class_balance": 0.56272040302267
+  },
+  "top10_features": [
+    {
+      "feature": "tf15_ret_15m_bar2",
+      "importance": 591
+    },
+    {
+      "feature": "tf15_ret_15m_bar",
+      "importance": 496
+    },
+    {
+      "feature": "tf15_high_low_15m",
+      "importance": 382
+    },
+    {
+      "feature": "tf15_vol_15m_bar",
+      "importance": 349
+    },
+    {
+      "feature": "vol_gk",
+      "importance": 335
+    },
+    {
+      "feature": "roc_30m",
+      "importance": 311
+    },
+    {
+      "feature": "tf5_vol_5m_bar",
+      "importance": 303
+    },
+    {
+      "feature": "ofi_15m",
+      "importance": 295
+    },
+    {
+      "feature": "vwap_dev_15m",
+      "importance": 289
+    },
+    {
+      "feature": "tf5_roc_6bar_5m",
+      "importance": 289
+    }
+  ],
+  "n_splits": 5
+}

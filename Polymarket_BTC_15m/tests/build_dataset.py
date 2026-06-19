@@ -1,7 +1,7 @@
 import pandas as pd
-from datav2 import fetch_binance_1m_data
-from featuresv2 import create_features
-from labelsv2 import create_polymarket_target
+from Polymarket_BTC_15m.test.datav2 import fetch_binance_1m_data
+from Polymarket_BTC_15m.test.featuresv2 import create_features
+from Polymarket_BTC_15m.test.labelsv2 import create_polymarket_target
 
 def build_final_dataset():
     print("🚀 DÉMARRAGE DE L'USINE À DONNÉES (Polymarket 5-Min MVP) 🚀\n")
