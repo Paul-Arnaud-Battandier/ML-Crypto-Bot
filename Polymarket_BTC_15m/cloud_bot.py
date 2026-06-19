@@ -33,6 +33,7 @@ from pathlib import Path
 # --- Ajout du répertoire racine au path ---
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT.parent))  # ajoute ML_Crypto_Bot aussi
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
