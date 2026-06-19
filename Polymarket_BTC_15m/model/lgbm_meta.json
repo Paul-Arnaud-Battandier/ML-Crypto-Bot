@@ -5,6 +5,8 @@
     "ret_5m",
     "ret_10m",
     "ret_15m",
+    "frac_diff_04",
+    "frac_diff_03",
     "vol_5m",
     "vol_15m",
     "vol_30m",
@@ -35,54 +37,54 @@
     "tf15_high_low_15m"
   ],
   "metrics": {
-    "oos_accuracy": 0.705793450881612,
-    "oos_auc": 0.7768720940306697,
-    "oos_logloss": 0.5617402693164677,
-    "oos_brier": 0.19014530437879174,
-    "n_samples": 1985,
-    "n_features": 33,
-    "class_balance": 0.56272040302267
+    "oos_accuracy": 0.6842996842996844,
+    "oos_auc": 0.7665482488395463,
+    "oos_logloss": 0.5670687691312689,
+    "oos_brier": 0.19478774593429174,
+    "n_samples": 129870,
+    "n_features": 35,
+    "class_balance": 0.49728189728189726
   },
   "top10_features": [
     {
-      "feature": "tf15_ret_15m_bar2",
-      "importance": 591
+      "feature": "tf15_ret_15m_bar",
+      "importance": 1762
     },
     {
-      "feature": "tf15_ret_15m_bar",
-      "importance": 496
+      "feature": "tf15_ret_15m_bar2",
+      "importance": 1509
     },
     {
       "feature": "tf15_high_low_15m",
-      "importance": 382
-    },
-    {
-      "feature": "tf15_vol_15m_bar",
-      "importance": 349
-    },
-    {
-      "feature": "vol_gk",
-      "importance": 335
+      "importance": 723
     },
     {
       "feature": "roc_30m",
-      "importance": 311
+      "importance": 683
     },
     {
-      "feature": "tf5_vol_5m_bar",
-      "importance": 303
+      "feature": "tf5_ret_5m_bar",
+      "importance": 671
     },
     {
-      "feature": "ofi_15m",
-      "importance": 295
+      "feature": "tf15_vol_15m_bar",
+      "importance": 637
+    },
+    {
+      "feature": "vol_30m",
+      "importance": 540
+    },
+    {
+      "feature": "tf5_roc_3bar_5m",
+      "importance": 513
+    },
+    {
+      "feature": "ret_15m",
+      "importance": 480
     },
     {
       "feature": "vwap_dev_15m",
-      "importance": 289
-    },
-    {
-      "feature": "tf5_roc_6bar_5m",
-      "importance": 289
+      "importance": 474
     }
   ],
   "n_splits": 5

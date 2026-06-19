@@ -1,13 +1,13 @@
 {
   "metrics": {
-    "oos_accuracy": 0.9732997481108312,
-    "oos_auc": 0.8835257228481047,
-    "oos_precision": 0.9886539453326457,
-    "oos_recall": 0.9840862422997947,
-    "oos_logloss": 0.2552043943622751,
-    "trade_rate": 0.9768261964735516,
-    "n_trades": 1939,
-    "n_samples": 1985
+    "oos_accuracy": 0.5623007623007623,
+    "oos_auc": 0.6796428575566471,
+    "oos_precision": 0.8912793011709994,
+    "oos_recall": 0.4516618719546502,
+    "oos_logloss": 0.6465957961185117,
+    "trade_rate": 0.3675752675752676,
+    "n_trades": 47737,
+    "n_samples": 129870
   },
   "feature_cols": [
     "proba_lgbm",
@@ -33,47 +33,47 @@
   "importances": [
     {
       "feature": "proba_lgbm",
-      "importance": 0.44411087650838615
+      "importance": 0.6921139101305743
     },
     {
       "feature": "tf15_ret_15m_bar",
-      "importance": 0.09807071178123045
-    },
-    {
-      "feature": "vwap_dev_15m",
-      "importance": 0.06986321773935356
-    },
-    {
-      "feature": "ofi_5m",
-      "importance": 0.06060968189182265
-    },
-    {
-      "feature": "vol_ratio",
-      "importance": 0.058580601691138524
-    },
-    {
-      "feature": "autocorr_1",
-      "importance": 0.053727655662822775
+      "importance": 0.13193311172262798
     },
     {
       "feature": "tf5_roc_3bar_5m",
-      "importance": 0.05003258734513769
-    },
-    {
-      "feature": "rsi_14",
-      "importance": 0.048200969099644025
-    },
-    {
-      "feature": "ofi_15m",
-      "importance": 0.04804242628180077
+      "importance": 0.049271536705877396
     },
     {
       "feature": "vol_gk",
-      "importance": 0.0369226487674857
+      "importance": 0.03408573629678905
+    },
+    {
+      "feature": "vwap_dev_15m",
+      "importance": 0.029523425606911638
+    },
+    {
+      "feature": "rsi_14",
+      "importance": 0.029325054394944677
+    },
+    {
+      "feature": "ofi_15m",
+      "importance": 0.015538535921213568
+    },
+    {
+      "feature": "vol_ratio",
+      "importance": 0.006332416340845886
+    },
+    {
+      "feature": "autocorr_1",
+      "importance": 0.004526949783988922
     },
     {
       "feature": "entropy_15m",
-      "importance": 0.031838623231177664
+      "importance": 0.0041506310556816825
+    },
+    {
+      "feature": "ofi_5m",
+      "importance": 0.0031986920405448734
     },
     {
       "feature": "poly_yes_prob",
