@@ -31,19 +31,13 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 # --- Ajout du répertoire racine au path ---
-# __file__ = /opt/render/project/src/Polymarket_BTC_15m/cloud_bot.py
-# ROOT     = /opt/render/project/src/Polymarket_BTC_15m/
-# sys.path doit contenir ROOT pour que `scriptsv2.data` soit trouvable
-ROOT = Path(__file__).resolve().parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-# Sécurité : forcer aussi le dossier parent
-if str(ROOT.parent) not in sys.path:
-    sys.path.insert(0, str(ROOT.parent))
+ROOT = Path(__file__).parent
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT.parent))  # ajoute ML_Crypto_Bot aussi
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from flask import Flask, jsonify
+from flask import Flask, jsonify, Response
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -290,23 +284,65 @@ def start_scheduler():
 
 
 # ---------------------------------------------------------------------------
+# HELPERS — lecture CSV
+# ---------------------------------------------------------------------------
+
+def read_trades():
+    """Lit trade_history.csv et retourne une liste de dicts, plus récent en premier."""
+    if not TRADE_LOG.exists():
+        return []
+    rows = []
+    try:
+        with open(TRADE_LOG, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                rows.append(row)
+        rows.reverse()
+    except Exception as e:
+        logger.error(f"Erreur lecture CSV : {e}")
+    return rows
+
+
+def compute_stats(trades):
+    """Calcule les métriques globales depuis la liste de trades."""
+    confirmed = [t for t in trades if t.get("trade") == "True"]
+    n_total   = len(trades)
+    n_trades  = len(confirmed)
+    n_skips   = n_total - n_trades
+
+    # Win = à implémenter quand on a le résultat Polymarket
+    # Pour l'instant on expose les métriques disponibles
+    lgbm_probas = []
+    for t in confirmed:
+        try:
+            lgbm_probas.append(float(t["lgbm_proba"]))
+        except (KeyError, ValueError):
+            pass
+
+    avg_conf = sum(lgbm_probas) / len(lgbm_probas) if lgbm_probas else 0
+
+    return {
+        "n_total"   : n_total,
+        "n_trades"  : n_trades,
+        "n_skips"   : n_skips,
+        "trade_rate": f"{n_trades/n_total*100:.1f}" if n_total else "0",
+        "avg_lgbm"  : f"{avg_conf:.3f}",
+        "up_count"  : sum(1 for t in confirmed if t.get("direction") == "UP"),
+        "down_count": sum(1 for t in confirmed if t.get("direction") == "DOWN"),
+    }
+
+
+# ---------------------------------------------------------------------------
 # FLASK APP
 # ---------------------------------------------------------------------------
 
 app = Flask(__name__)
 
 
-@app.route("/")
-def home():
-    """Keep-alive endpoint — pingé par UptimeRobot toutes les 5 min."""
-    with _state_lock:
-        n_runs   = _bot_state["n_runs"]
-        last_run = _bot_state["last_run"]
-    return (
-        f"🟢 BTC Polymarket Bot v2 | "
-        f"Cycles: {n_runs} | "
-        f"Dernier: {last_run or 'jamais'}"
-    )
+@app.route("/ping")
+def ping():
+    """Endpoint ultra-léger pour UptimeRobot — pas de lecture CSV."""
+    return "ok", 200
 
 
 @app.route("/health")
@@ -315,92 +351,26 @@ def health():
     with _state_lock:
         state = dict(_bot_state)
     return jsonify({
-        "status" : "running",
-        "uptime" : state["started_at"],
-        "stats"  : {
-            "n_runs"  : state["n_runs"],
-            "n_trades": state["n_trades"],
-            "n_skips" : state["n_skips"],
-            "last_run": state["last_run"],
-        },
+        "status"       : "running",
+        "uptime"       : state["started_at"],
+        "stats"        : {"n_runs": state["n_runs"], "n_trades": state["n_trades"], "n_skips": state["n_skips"], "last_run": state["last_run"]},
         "last_decision": state["last_decision"],
         "recent_errors": state["errors"][-3:],
     })
 
 
-@app.route("/status")
-def status():
-    """Dernière décision du bot."""
+@app.route("/api/trades")
+def api_trades():
+    """API JSON — retourne les trades pour le dashboard JS."""
+    trades = read_trades()
+    stats  = compute_stats(trades)
     with _state_lock:
-        decision = _bot_state.get("last_decision")
-        last_run = _bot_state.get("last_run")
+        bot_state = dict(_bot_state)
     return jsonify({
-        "last_run"     : last_run,
-        "last_decision": decision,
+        "trades"    : trades[:50],
+        "stats"     : stats,
+        "bot_state" : {"n_runs": bot_state["n_runs"], "last_run": bot_state["last_run"]},
     })
-
-
-@app.route("/csv")
-def show_csv():
-    """Affiche le trade history en HTML lisible."""
-    if not TRADE_LOG.exists():
-        return "⏳ Aucun trade loggé pour l'instant."
-
-    with open(TRADE_LOG, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-
-    if not lines:
-        return "⏳ Fichier CSV vide."
-
-    # Construction table HTML
-    header = lines[0].strip().split(",")
-    rows   = [l.strip().split(",") for l in lines[1:]]
-
-    # Dernières lignes en premier
-    rows.reverse()
-
-    th = "".join(f"<th>{h}</th>" for h in header)
-    trs = ""
-    for row in rows:
-        side  = row[header.index("side")]  if "side"  in header else ""
-        trade = row[header.index("trade")] if "trade" in header else ""
-        color = "#d4edda" if trade == "True" else "#f8f9fa"
-        td    = "".join(f"<td>{v}</td>" for v in row)
-        trs  += f'<tr style="background:{color}">{td}</tr>'
-
-    n_trades = sum(1 for r in rows if len(r) > header.index("trade") and r[header.index("trade")] == "True")
-    n_total  = len(rows)
-    rate     = f"{n_trades/n_total*100:.1f}%" if n_total > 0 else "N/A"
-
-    html = f"""
-    <!DOCTYPE html><html><head>
-    <meta charset="utf-8">
-    <title>BTC Bot — Trade History</title>
-    <meta http-equiv="refresh" content="60">
-    <style>
-      body {{ font-family: monospace; padding: 20px; background: #1a1a2e; color: #eee; }}
-      h1 {{ color: #00d4ff; }}
-      .stats {{ background: #16213e; padding: 12px; border-radius: 8px; margin-bottom: 16px; }}
-      table {{ border-collapse: collapse; width: 100%; font-size: 12px; }}
-      th {{ background: #0f3460; color: #00d4ff; padding: 8px; text-align: left; }}
-      td {{ padding: 6px 8px; border-bottom: 1px solid #333; }}
-      .badge {{ padding: 2px 8px; border-radius: 4px; font-weight: bold; }}
-    </style>
-    </head><body>
-    <h1>🤖 BTC Polymarket Bot — Trade History</h1>
-    <div class="stats">
-      📊 Total cycles : <b>{n_total}</b> |
-      ✅ Trades : <b>{n_trades}</b> |
-      📈 Trade rate : <b>{rate}</b> |
-      🔄 Refresh auto : 60s
-    </div>
-    <table>
-      <thead><tr>{th}</tr></thead>
-      <tbody>{trs}</tbody>
-    </table>
-    </body></html>
-    """
-    return html
 
 
 @app.route("/run_now")
@@ -409,22 +379,384 @@ def run_now():
     thread = threading.Thread(target=run_cycle)
     thread.daemon = True
     thread.start()
-    return jsonify({"status": "cycle lancé en arrière-plan"})
+    return jsonify({"status": "cycle lancé"})
+
+
+@app.route("/")
+def dashboard():
+    """Dashboard principal — 3 onglets, données live depuis /api/trades."""
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BTC/Polymarket — Algo Trading Bot</title>
+<meta http-equiv="refresh" content="120">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}
+.container{max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
+.header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:2rem;padding-bottom:1.5rem;border-bottom:1px solid #1e2432}
+.header-left h1{font-size:20px;font-weight:500;color:#f1f5f9}
+.header-left p{font-size:13px;color:#64748b;margin-top:4px}
+.badge-live{display:inline-flex;align-items:center;gap:5px;background:#0f2922;color:#34d399;font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid #065f46}
+.badge-live::before{content:'';width:6px;height:6px;border-radius:50%;background:#34d399;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.tabs{display:flex;gap:0;border-bottom:1px solid #1e2432;margin-bottom:2rem}
+.tab{padding:10px 20px;font-size:13px;font-weight:500;color:#64748b;cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab:hover{color:#94a3b8}
+.tab.active{color:#f1f5f9;border-bottom:2px solid #3b82f6}
+.tab-content{display:none}.tab-content.active{display:block}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1.5rem}
+.grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:1.25rem;margin-bottom:1.25rem}
+.metric{background:#141820;border:1px solid #1e2432;border-radius:10px;padding:1rem}
+.metric-label{font-size:11px;color:#475569;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
+.metric-value{font-size:24px;font-weight:500;color:#f1f5f9}
+.metric-sub{font-size:11px;color:#334155;margin-top:4px}
+.card{background:#141820;border:1px solid #1e2432;border-radius:12px;padding:1.25rem;margin-bottom:1.25rem}
+.card-title{font-size:11px;font-weight:500;color:#475569;text-transform:uppercase;letter-spacing:.06em;margin-bottom:1rem}
+.up{color:#34d399}.down{color:#f87171}
+.neutral{color:#64748b}
+.pill{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;font-weight:500}
+.pill-up{background:#052e16;color:#34d399;border:1px solid #065f46}
+.pill-down{background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d}
+.pill-skip{background:#1e2432;color:#64748b;border:1px solid #2d3748}
+table{width:100%;font-size:12px;border-collapse:collapse;table-layout:fixed}
+th{font-size:11px;color:#475569;font-weight:500;padding:7px 10px;text-align:left;border-bottom:1px solid #1e2432}
+td{padding:8px 10px;border-bottom:1px solid #1a2035;color:#cbd5e1}
+tr:last-child td{border-bottom:none}
+.step{display:flex;gap:14px;margin-bottom:1.5rem}
+.step-num{min-width:30px;height:30px;border-radius:50%;background:#1e3a5f;color:#60a5fa;font-size:12px;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.step h4{font-size:14px;font-weight:500;color:#f1f5f9;margin-bottom:5px}
+.step p{font-size:13px;color:#64748b;line-height:1.65}
+.why{border-left:2px solid #1e2432;padding-left:1rem;margin-bottom:1.25rem}
+.why.pivot{border-left-color:#3b82f6}
+.why h4{font-size:13px;font-weight:500;color:#e2e8f0;margin-bottom:5px}
+.why p{font-size:13px;color:#64748b;line-height:1.65}
+.tech-tag{display:inline-block;font-size:11px;padding:3px 9px;border-radius:5px;background:#1e2432;color:#64748b;margin:2px;border:1px solid #2d3748}
+.chart-wrap{position:relative;width:100%}
+.skill-bar{height:3px;background:#1e2432;border-radius:2px;margin-top:5px}
+.skill-fill{height:3px;border-radius:2px;background:#3b82f6}
+.social-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:8px;border:1px solid #2d3748;font-size:13px;color:#e2e8f0;text-decoration:none;margin-right:8px;background:#141820}
+.social-btn:hover{background:#1e2432;border-color:#3d4f6b}
+.poly-box{border-radius:8px;padding:.85rem 1rem;flex:1;text-align:center}
+.poly-yes{background:#052e16;border:1px solid #065f46}
+.poly-no{background:#2d0a0a;border:1px solid #7f1d1d}
+.poly-price{font-size:26px;font-weight:500}
+.poly-lbl{font-size:11px;color:#64748b;margin-top:3px}
+.divider{border:none;border-top:1px solid #1e2432;margin:1.5rem 0}
+.disclaimer{font-size:11px;color:#334155;padding:.85rem 1rem;background:#0d1117;border-radius:8px;margin-top:1.5rem;border-left:2px solid #1e2432;line-height:1.6}
+.profile-avatar{width:68px;height:68px;border-radius:50%;background:#1e3a5f;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:500;color:#60a5fa;flex-shrink:0}
+.feat-row{display:flex;align-items:center;padding:6px 0;border-bottom:1px solid #1a2035;font-size:12px;gap:10px}
+.feat-row:last-child{border-bottom:none}
+.feat-bar-bg{flex:1;height:3px;background:#1e2432;border-radius:2px}
+.feat-bar-fill{height:3px;border-radius:2px}
+#last-update{font-size:11px;color:#334155;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+  <div class="header-left">
+    <h1>BTC/Polymarket — Algorithmic Trading Bot</h1>
+    <p>LightGBM + Random Forest meta-labelling &middot; 15-minute binary prediction &middot; Paper trading</p>
+    <p id="last-update">Loading...</p>
+  </div>
+  <span class="badge-live">Live</span>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('approach',this)">Approach</button>
+  <button class="tab" onclick="switchTab('perf',this)">Performance</button>
+  <button class="tab" onclick="switchTab('profile',this)">About me</button>
+</div>
+
+<!-- ══════════════════════════ TAB 1 — APPROACH -->
+<div id="tab-approach" class="tab-content active">
+  <div class="card">
+    <div class="card-title">From BTC 4H swing trading to Polymarket binary prediction</div>
+    <div class="why">
+      <h4>Phase 1 — BTC/USDT 4H swing trading (abandoned)</h4>
+      <p>Initial strategy: XGBoost with Optuna hyperparameter tuning, funding rates, Fear &amp; Greed index, and macro data (DXY, equities). Full pipeline built: data &rarr; features &rarr; triple-barrier labels &rarr; meta-labelling (Random Forest). After backtesting, the combined model showed <span class="down">no positive expectancy</span> — XGBoost alone: 33.25% win rate, meta-model precision: 55.14% (break-even at 1.5:1 R/R requires &gt;40%). Managing stop-losses, position sizing, and intrabar fluctuations added complexity without edge.</p>
+    </div>
+    <div class="why pivot">
+      <h4>Pivot — why Polymarket 15-minute binary markets?</h4>
+      <p>Polymarket's BTC up/down contracts eliminate the core challenge: <em>no stop-loss, no slippage, no intrabar noise</em>. The market resolves exactly at close[t+15min]. Binary label = 1 if close[t+15] &gt; close[t]. This lets the model focus purely on directional quality — measured against a clean, unambiguous ground truth every 15 minutes.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Pipeline — 7 steps</div>
+    <div class="step"><div class="step-num">1</div><div><h4>Data collection</h4><p>Binance OHLCV 1m via ccxt (public API). 90-day backfill + incremental live updates. Polymarket CLOB API for real-time bid/ask using a deterministic slug: <code style="font-size:11px;background:#1e2432;padding:1px 6px;border-radius:3px;color:#94a3b8">btc-updown-15m-{unix_ts}</code> — no search query needed, mathematically computed each cycle.</p></div></div>
+    <div class="step"><div class="step-num">2</div><div><h4>Feature engineering — Lopez de Prado framework</h4><p>35 features across 6 families: fractional differentiation (d=0.4, preserves long memory while ensuring stationarity), Shannon entropy of returns, Garman-Klass volatility estimator, order flow imbalance, VWAP deviation, autocorrelation, multi-timeframe context (5m + 15m resampled from 1m). Purged K-Fold CV prevents lookahead bias from rolling windows.</p></div></div>
+    <div class="step"><div class="step-num">3</div><div><h4>Primary model — LightGBM</h4><p>Trained with Purged K-Fold CV (5 folds, purge=30 bars). OOS AUC: 0.768, ACC: 68.5% — consistent across all folds. 130,978 samples, perfectly balanced (49.7% UP / 50.3% DOWN).</p></div></div>
+    <div class="step"><div class="step-num">4</div><div><h4>Meta-labelling — Random Forest</h4><p>The RF predicts whether the LGBM signal is worth trading — not the direction. Meta-label = 1 if LGBM was correct. Filters 64% of signals. OOS precision: 89.3%. Live Polymarket features (spread, implied probability, order imbalance) injected at inference time.</p></div></div>
+    <div class="step"><div class="step-num">5</div><div><h4>Combined decision gate</h4><p>Trade only when: LGBM confidence &gt; 55% AND RF meta probability &gt; 55% AND Polymarket spread &lt; 10%. This triple filter ensures capital is only deployed on high-conviction, liquid signals.</p></div></div>
+    <div class="step"><div class="step-num">6</div><div><h4>Live bot — Render + APScheduler</h4><p>Deployed on Render (free tier). APScheduler triggers at hh:02, hh:17, hh:32, hh:47 UTC. Flask keeps the service alive; UptimeRobot pings /ping every 5 minutes. Each cycle completes in ~45 seconds.</p></div></div>
+    <div class="step"><div class="step-num">7</div><div><h4>Logging &amp; evaluation</h4><p>Every cycle logged to CSV: timestamp, direction, LGBM proba, meta proba, Polymarket snapshot, BTC close. Results compared against Polymarket outcomes for ground-truth win rate evaluation.</p></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Tech stack</div>
+    <div>
+      <span class="tech-tag">Python 3.11</span><span class="tech-tag">LightGBM</span><span class="tech-tag">scikit-learn</span><span class="tech-tag">pandas</span><span class="tech-tag">numpy</span><span class="tech-tag">scipy</span><span class="tech-tag">ccxt</span><span class="tech-tag">Flask</span><span class="tech-tag">Gunicorn</span><span class="tech-tag">APScheduler</span><span class="tech-tag">Render</span><span class="tech-tag">Polymarket CLOB API</span><span class="tech-tag">Lopez de Prado AFML</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ TAB 2 — PERFORMANCE -->
+<div id="tab-perf" class="tab-content">
+
+  <div class="grid-4">
+    <div class="metric"><div class="metric-label">LGBM AUC OOS</div><div class="metric-value up">0.768</div><div class="metric-sub">5-fold purged CV</div></div>
+    <div class="metric"><div class="metric-label">Directional ACC</div><div class="metric-value">68.5%</div><div class="metric-sub">vs 50% random</div></div>
+    <div class="metric"><div class="metric-label">Meta precision</div><div class="metric-value up">89.3%</div><div class="metric-sub">when RF confirms</div></div>
+    <div class="metric"><div class="metric-label">Signal filter</div><div class="metric-value">36%</div><div class="metric-sub">of signals kept</div></div>
+  </div>
+
+  <div class="grid-4">
+    <div class="metric"><div class="metric-label">Total cycles</div><div class="metric-value" id="m-total">—</div><div class="metric-sub">since deployment</div></div>
+    <div class="metric"><div class="metric-label">Trades placed</div><div class="metric-value" id="m-trades">—</div><div class="metric-sub" id="m-traderate">—</div></div>
+    <div class="metric"><div class="metric-label">UP signals</div><div class="metric-value up" id="m-up">—</div><div class="metric-sub">confirmed by RF</div></div>
+    <div class="metric"><div class="metric-label">DOWN signals</div><div class="metric-value down" id="m-down">—</div><div class="metric-sub">confirmed by RF</div></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Simulated equity curve — $10 flat bet</div>
+      <div class="chart-wrap" style="height:190px"><canvas id="eqChart" role="img" aria-label="Simulated equity curve">Equity curve.</canvas></div>
+      <div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:#475569">
+        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:2px;display:inline-block;background:#3b82f6"></span>Equity (starts $100)</span>
+        <span id="eq-summary" style="margin-left:auto;color:#64748b"></span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Feature importance — LightGBM top 8</div>
+      <div id="feat-list"></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Recent cycles</div>
+      <table>
+        <thead><tr>
+          <th style="width:17%">Time UTC</th>
+          <th style="width:15%">Side</th>
+          <th style="width:17%">LGBM</th>
+          <th style="width:17%">Meta</th>
+          <th style="width:34%">BTC close</th>
+        </tr></thead>
+        <tbody id="trade-tbody"><tr><td colspan="5" style="text-align:center;color:#334155;padding:1.5rem">Loading...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-title">Polymarket — current window</div>
+      <div style="display:flex;gap:8px;margin-bottom:1rem" id="poly-boxes">
+        <div class="poly-box poly-yes"><div class="poly-price up" id="poly-yes">—</div><div class="poly-lbl">YES &middot; BTC up</div></div>
+        <div style="display:flex;align-items:center;font-size:11px;color:#334155">vs</div>
+        <div class="poly-box poly-no"><div class="poly-price down" id="poly-no">—</div><div class="poly-lbl">NO &middot; BTC down</div></div>
+      </div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:1.25rem">
+        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1e2432"><span>Spread</span><span id="poly-spread">—</span></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1e2432"><span>BTC close (entry)</span><span id="poly-btc">—</span></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0"><span>Bot decision</span><span id="poly-decision" style="font-weight:500">—</span></div>
+      </div>
+      <div class="card-title">Direction distribution</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="chart-wrap" style="height:100px;width:100px;flex-shrink:0"><canvas id="distChart" role="img" aria-label="Direction distribution">Distribution.</canvas></div>
+        <div id="dist-legend" style="font-size:12px;color:#64748b;display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    Paper trading only — no real money involved. Predictions generated by a machine learning pipeline trained on 131k Binance 1m candles (90 days). AUC 0.768 and meta precision 89.3% measured out-of-sample via Purged K-Fold CV (Lopez de Prado). Past performance does not guarantee future results.
+  </div>
+</div>
+
+<!-- ══════════════════════════ TAB 3 — PROFILE -->
+<div id="tab-profile" class="tab-content">
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:18px;margin-bottom:1.5rem">
+      <div class="profile-avatar">PAB</div>
+      <div>
+        <p style="font-size:18px;font-weight:500;color:#f1f5f9">Paul-Arnaud Battandier</p>
+        <p style="font-size:13px;color:#64748b;margin-top:4px">MSc Financial Engineering &middot; ECE Paris &middot; Class of 2027</p>
+        <p style="font-size:12px;color:#475569;margin-top:3px">Seeking end-of-studies internship &middot; Jan/Feb 2027 &middot; Trading or Quantitative Research</p>
+      </div>
+    </div>
+    <div style="margin-bottom:1.5rem">
+      <a class="social-btn" href="https://www.linkedin.com/in/paul-arnaud-battandier/" target="_blank">&#xea6e; LinkedIn</a>
+      <a class="social-btn" href="https://github.com/Paul-Arnaud-Battandier" target="_blank">&#xea65; GitHub</a>
+    </div>
+    <div class="divider"></div>
+    <div class="grid-2">
+      <div>
+        <div class="card-title">Skills</div>
+        <div style="font-size:13px;display:flex;flex-direction:column;gap:14px">
+          <div><div style="display:flex;justify-content:space-between;color:#cbd5e1"><span>Machine learning (LightGBM, RF, XGBoost)</span><span style="color:#475569">90%</span></div><div class="skill-bar"><div class="skill-fill" style="width:90%"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;color:#cbd5e1"><span>Python (pandas, numpy, scikit-learn)</span><span style="color:#475569">85%</span></div><div class="skill-bar"><div class="skill-fill" style="width:85%"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;color:#cbd5e1"><span>Quantitative finance (LdP framework)</span><span style="color:#475569">80%</span></div><div class="skill-bar"><div class="skill-fill" style="width:80%"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;color:#cbd5e1"><span>API integration &amp; cloud deployment</span><span style="color:#475569">75%</span></div><div class="skill-bar"><div class="skill-fill" style="width:75%"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;color:#cbd5e1"><span>Financial markets (crypto, derivatives)</span><span style="color:#475569">70%</span></div><div class="skill-bar"><div class="skill-fill" style="width:70%"></div></div></div>
+        </div>
+      </div>
+      <div>
+        <div class="card-title">This project</div>
+        <p style="font-size:13px;color:#64748b;line-height:1.7;margin-bottom:1rem">Built entirely from scratch: data collection, feature engineering (Lopez de Prado), model training, live deployment on Render, and this dashboard. No boilerplate — every line written and understood.</p>
+        <p style="font-size:13px;color:#64748b;line-height:1.7;margin-bottom:1rem">Started with a 4H BTC swing strategy, abandoned after backtesting revealed no edge. Pivoted to Polymarket binary prediction for a cleaner signal and verifiable ground truth.</p>
+        <p style="font-size:13px;color:#64748b;line-height:1.7">Bot running live since June 2026. Every prediction logged and compared against real Polymarket outcomes.</p>
+        <div style="margin-top:1rem">
+          <div class="card-title" style="margin-bottom:.5rem">Looking for</div>
+          <span class="tech-tag">Proprietary trading</span>
+          <span class="tech-tag">Quant research</span>
+          <span class="tech-tag">ML for finance</span>
+          <span class="tech-tag">Paris &middot; London &middot; Remote</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+const FEATS = [
+  {name:'tf15_ret_15m_bar', v:1796, c:'#3b82f6'},
+  {name:'tf15_ret_15m_bar2', v:1503, c:'#3b82f6'},
+  {name:'tf15_high_low_15m', v:726,  c:'#10b981'},
+  {name:'roc_30m',           v:682,  c:'#10b981'},
+  {name:'tf5_ret_5m_bar',    v:664,  c:'#10b981'},
+  {name:'frac_diff_03',      v:507,  c:'#f59e0b'},
+  {name:'vol_30m',           v:527,  c:'#f59e0b'},
+  {name:'ofi_15m',           v:295,  c:'#f59e0b'},
+];
+const maxV = FEATS[0].v;
+const fl = document.getElementById('feat-list');
+FEATS.forEach(f => {
+  const pct = Math.round(f.v / maxV * 100);
+  fl.innerHTML += `<div class="feat-row"><span style="color:#64748b;min-width:145px;font-size:11px;overflow:hidden;text-overflow:ellipsis">${f.name}</span><div class="feat-bar-bg"><div class="feat-bar-fill" style="width:${pct}%;background:${f.c}"></div></div><span style="font-size:11px;color:#475569;min-width:32px;text-align:right">${f.v}</span></div>`;
+});
+
+let eqChart = null, distChart = null;
+
+async function loadData() {
+  try {
+    const res = await fetch('/api/trades');
+    const data = await res.json();
+    const trades = data.trades || [];
+    const stats  = data.stats  || {};
+    const bot    = data.bot_state || {};
+
+    document.getElementById('last-update').textContent =
+      'Last update: ' + (bot.last_run ? new Date(bot.last_run).toLocaleTimeString('en-GB') : '—') +
+      ' · Cycles: ' + (bot.n_runs || '—');
+
+    document.getElementById('m-total').textContent  = stats.n_total  || '0';
+    document.getElementById('m-trades').textContent = stats.n_trades || '0';
+    document.getElementById('m-traderate').textContent = (stats.trade_rate || '0') + '% of cycles';
+    document.getElementById('m-up').textContent    = stats.up_count   || '0';
+    document.getElementById('m-down').textContent  = stats.down_count || '0';
+
+    const confirmed = trades.filter(t => t.trade === 'True');
+    const last = trades[0];
+
+    if (last) {
+      document.getElementById('poly-yes').textContent = last.poly_yes_mid ? (parseFloat(last.poly_yes_mid)*100).toFixed(1)+'%' : '—';
+      document.getElementById('poly-no').textContent  = last.poly_no_mid  ? (parseFloat(last.poly_no_mid)*100).toFixed(1)+'%'  : '—';
+      document.getElementById('poly-spread').textContent = last.poly_spread ? parseFloat(last.poly_spread).toFixed(3) : '—';
+      document.getElementById('poly-btc').textContent = last.btc_close_entry ? '$'+parseFloat(last.btc_close_entry).toLocaleString('en-US',{maximumFractionDigits:0}) : '—';
+      const dec = document.getElementById('poly-decision');
+      if (last.trade === 'True') {
+        dec.textContent = last.direction === 'UP' ? 'BTC UP' : 'BTC DOWN';
+        dec.className = last.direction === 'UP' ? 'up' : 'down';
+      } else {
+        dec.textContent = 'SKIP'; dec.className = 'neutral';
+      }
+    }
+
+    const tbody = document.getElementById('trade-tbody');
+    tbody.innerHTML = '';
+    (trades.slice(0,10)).forEach(t => {
+      const pc = t.side==='YES'?'pill-up':t.side==='NO'?'pill-down':'pill-skip';
+      const dt = new Date(t.timestamp);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</td><td><span class="pill ${pc}">${t.side||'SKIP'}</span></td><td>${t.lgbm_proba?(parseFloat(t.lgbm_proba)*100).toFixed(1)+'%':'—'}</td><td>${t.meta_proba&&t.meta_proba!=='None'?(parseFloat(t.meta_proba)*100).toFixed(1)+'%':'—'}</td><td>$${t.btc_close_entry?parseFloat(t.btc_close_entry).toLocaleString('en-US',{maximumFractionDigits:0}):'—'}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    let eq = 100;
+    const eqLabels = ['Start'], eqData = [100], eqColors = [];
+    confirmed.slice().reverse().forEach(t => {
+      const pUp  = t.lgbm_proba ? parseFloat(t.lgbm_proba) : 0.5;
+      const won  = (t.direction === 'UP' && pUp >= 0.5) || (t.direction === 'DOWN' && pUp < 0.5);
+      eq += won ? 9 : -10;
+      const dt = new Date(t.timestamp);
+      eqLabels.push(dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}));
+      eqData.push(parseFloat(eq.toFixed(2)));
+      eqColors.push(won ? '#10b981' : '#f87171');
+    });
+    document.getElementById('eq-summary').textContent = `P&L: ${eq>=100?'+':''}$${(eq-100).toFixed(0)}`;
+
+    if (eqChart) eqChart.destroy();
+    eqChart = new Chart(document.getElementById('eqChart'), {
+      type: 'line',
+      data: { labels: eqLabels, datasets: [{
+        data: eqData, borderColor: '#3b82f6', borderWidth: 2,
+        pointRadius: eqData.map((_,i) => i===0?0:4),
+        pointBackgroundColor: ['#3b82f6', ...eqColors],
+        fill: false, tension: 0.3
+      }]},
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+        scales: {
+          x:{ticks:{font:{size:10},color:'#475569',maxTicksLimit:6},grid:{color:'rgba(255,255,255,0.03)'}},
+          y:{ticks:{font:{size:10},color:'#475569',callback:v=>'$'+v},grid:{color:'rgba(255,255,255,0.05)'}}
+        }
+      }
+    });
+
+    const upC = stats.up_count||0, dnC = stats.down_count||0, skC = stats.n_skips||0;
+    if (distChart) distChart.destroy();
+    distChart = new Chart(document.getElementById('distChart'), {
+      type: 'doughnut',
+      data: { labels:['UP','DOWN','Skip'], datasets:[{data:[upC,dnC,skC],backgroundColor:['#10b981','#f87171','#334155'],borderWidth:0}]},
+      options: { responsive:true, maintainAspectRatio:false, cutout:'70%', plugins:{legend:{display:false}}}
+    });
+    document.getElementById('dist-legend').innerHTML =
+      `<span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#10b981"></span>UP ${upC}</span>` +
+      `<span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#f87171"></span>DOWN ${dnC}</span>` +
+      `<span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#334155"></span>Skip ${skC}</span>`;
+
+  } catch(e) {
+    console.error('Error loading data:', e);
+  }
+}
+
+loadData();
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>"""
+    return html
 
 
 # ---------------------------------------------------------------------------
 # DÉMARRAGE DU BOT (compatible Gunicorn + python direct)
 # ---------------------------------------------------------------------------
 
-# Lance le scheduler dans un thread daemon dès l'import du module
-# → Gunicorn importe cloud_bot, le bot démarre automatiquement
 _scheduler = start_scheduler()
-
-# Premier cycle immédiat au démarrage (pour tester que tout fonctionne)
-#_init_thread = threading.Thread(target=run_cycle)
-#_init_thread.daemon = True
-#_init_thread.start()
-#trop agressif pour binance, on laisse le scheduler gérer les cycles
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
