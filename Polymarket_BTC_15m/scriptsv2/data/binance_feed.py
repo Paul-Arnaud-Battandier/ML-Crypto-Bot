@@ -51,6 +51,8 @@ def _fetch_range(
     """Récupère tous les OHLCV 1m entre since_ms et until_ms (ms epoch)."""
     all_rows = []
     cursor   = since_ms
+    max_retries = 3      # ← ajouter
+    retries = 0          # ← ajouter
 
     while cursor < until_ms:
         try:
@@ -58,8 +60,12 @@ def _fetch_range(
                 SYMBOL, TIMEFRAME, since=cursor, limit=LIMIT
             )
         except ccxt.NetworkError as e:
+            retries += 1
+            if retries >= max_retries:
+                logger.error(f"NetworkError, exceeded max retries : {e}")
+                break
             logger.warning(f"NetworkError, retry in 5s : {e}")
-            time.sleep(5)
+            time.sleep(30)
             continue
         except ccxt.ExchangeError as e:
             logger.error(f"ExchangeError : {e}")

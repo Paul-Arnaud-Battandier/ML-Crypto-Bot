@@ -421,10 +421,10 @@ def run_now():
 _scheduler = start_scheduler()
 
 # Premier cycle immédiat au démarrage (pour tester que tout fonctionne)
-_init_thread = threading.Thread(target=run_cycle)
-_init_thread.daemon = True
-_init_thread.start()
-
+#_init_thread = threading.Thread(target=run_cycle)
+#_init_thread.daemon = True
+#_init_thread.start()
+#trop agressif pour binance, on laisse le scheduler gérer les cycles
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
