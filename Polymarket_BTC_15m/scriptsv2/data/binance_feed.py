@@ -160,7 +160,7 @@ def fetch_live(n_bars: int = LIVE_BARS) -> pd.DataFrame:
 
     # Exclure la bougie en cours (non clôturée)
     current_minute = datetime.now(timezone.utc).replace(second=0, microsecond=0)
-    df = df[df["timestamp"] < pd.Timestamp(current_minute, tz="UTC")]
+    df = df[df["timestamp"] < pd.Timestamp(current_minute)]
 
     return df.tail(n_bars).reset_index(drop=True)
 
