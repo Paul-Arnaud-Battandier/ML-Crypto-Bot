@@ -31,9 +31,15 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 # --- Ajout du répertoire racine au path ---
-ROOT = Path(__file__).parent
-sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT.parent))  # ajoute ML_Crypto_Bot aussi
+# __file__ = /opt/render/project/src/Polymarket_BTC_15m/cloud_bot.py
+# ROOT     = /opt/render/project/src/Polymarket_BTC_15m/
+# sys.path doit contenir ROOT pour que `scriptsv2.data` soit trouvable
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+# Sécurité : forcer aussi le dossier parent
+if str(ROOT.parent) not in sys.path:
+    sys.path.insert(0, str(ROOT.parent))
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
