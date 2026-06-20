@@ -37,54 +37,54 @@
     "tf15_high_low_15m"
   ],
   "metrics": {
-    "oos_accuracy": 0.6842996842996844,
-    "oos_auc": 0.7665482488395463,
-    "oos_logloss": 0.5670687691312689,
-    "oos_brier": 0.19478774593429174,
-    "n_samples": 129870,
+    "oos_accuracy": 0.685260120020156,
+    "oos_auc": 0.7676718780801363,
+    "oos_logloss": 0.5663595639484191,
+    "oos_brier": 0.19443345974153953,
+    "n_samples": 130978,
     "n_features": 35,
-    "class_balance": 0.49728189728189726
+    "class_balance": 0.49736596985753334
   },
   "top10_features": [
     {
       "feature": "tf15_ret_15m_bar",
-      "importance": 1762
+      "importance": 1796
     },
     {
       "feature": "tf15_ret_15m_bar2",
-      "importance": 1509
+      "importance": 1503
     },
     {
       "feature": "tf15_high_low_15m",
-      "importance": 723
+      "importance": 726
     },
     {
       "feature": "roc_30m",
-      "importance": 683
+      "importance": 682
     },
     {
       "feature": "tf5_ret_5m_bar",
-      "importance": 671
+      "importance": 664
     },
     {
       "feature": "tf15_vol_15m_bar",
-      "importance": 637
+      "importance": 658
     },
     {
       "feature": "vol_30m",
-      "importance": 540
+      "importance": 527
     },
     {
       "feature": "tf5_roc_3bar_5m",
-      "importance": 513
+      "importance": 515
+    },
+    {
+      "feature": "frac_diff_03",
+      "importance": 507
     },
     {
       "feature": "ret_15m",
-      "importance": 480
-    },
-    {
-      "feature": "vwap_dev_15m",
-      "importance": 474
+      "importance": 492
     }
   ],
   "n_splits": 5

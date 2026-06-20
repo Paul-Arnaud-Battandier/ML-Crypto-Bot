@@ -1,13 +1,13 @@
 {
   "metrics": {
-    "oos_accuracy": 0.5623007623007623,
-    "oos_auc": 0.6796428575566471,
-    "oos_precision": 0.8912793011709994,
-    "oos_recall": 0.4516618719546502,
-    "oos_logloss": 0.6465957961185117,
-    "trade_rate": 0.3675752675752676,
-    "n_trades": 47737,
-    "n_samples": 129870
+    "oos_accuracy": 0.5590557192811006,
+    "oos_auc": 0.6805497677785648,
+    "oos_precision": 0.893270530584657,
+    "oos_recall": 0.4452059120768065,
+    "oos_logloss": 0.646649297917156,
+    "trade_rate": 0.3614652842462093,
+    "n_trades": 47344,
+    "n_samples": 130978
   },
   "feature_cols": [
     "proba_lgbm",
@@ -33,47 +33,47 @@
   "importances": [
     {
       "feature": "proba_lgbm",
-      "importance": 0.6921139101305743
+      "importance": 0.6911277331668064
     },
     {
       "feature": "tf15_ret_15m_bar",
-      "importance": 0.13193311172262798
+      "importance": 0.12984173623598277
     },
     {
       "feature": "tf5_roc_3bar_5m",
-      "importance": 0.049271536705877396
+      "importance": 0.050849951912906234
     },
     {
       "feature": "vol_gk",
-      "importance": 0.03408573629678905
+      "importance": 0.03477735171020072
     },
     {
       "feature": "vwap_dev_15m",
-      "importance": 0.029523425606911638
+      "importance": 0.03103858794085395
     },
     {
       "feature": "rsi_14",
-      "importance": 0.029325054394944677
+      "importance": 0.028190595925230075
     },
     {
       "feature": "ofi_15m",
-      "importance": 0.015538535921213568
+      "importance": 0.016492002938643818
     },
     {
       "feature": "vol_ratio",
-      "importance": 0.006332416340845886
-    },
-    {
-      "feature": "autocorr_1",
-      "importance": 0.004526949783988922
+      "importance": 0.005714232215990323
     },
     {
       "feature": "entropy_15m",
-      "importance": 0.0041506310556816825
+      "importance": 0.004688804577822719
+    },
+    {
+      "feature": "autocorr_1",
+      "importance": 0.0037848104099731435
     },
     {
       "feature": "ofi_5m",
-      "importance": 0.0031986920405448734
+      "importance": 0.003494192965589837
     },
     {
       "feature": "poly_yes_prob",
