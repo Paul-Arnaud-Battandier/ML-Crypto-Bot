@@ -785,7 +785,7 @@ async function loadData() {
   }
 }
 
-# MODIFS JS
+// MODIFS JS
 async function loadPolymarketEmbed() {
   const container = document.getElementById("poly-live-container");
   if (!container) return;
