@@ -636,23 +636,6 @@ function switchTab(id, btn) {
   btn.classList.add('active');
 }
 
-const FEATS = [
-  {name:'tf15_ret_15m_bar', v:1796, c:'#3b82f6'},
-  {name:'tf15_ret_15m_bar2', v:1503, c:'#3b82f6'},
-  {name:'tf15_high_low_15m', v:726,  c:'#10b981'},
-  {name:'roc_30m',           v:682,  c:'#10b981'},
-  {name:'tf5_ret_5m_bar',    v:664,  c:'#10b981'},
-  {name:'frac_diff_03',      v:507,  c:'#f59e0b'},
-  {name:'vol_30m',           v:527,  c:'#f59e0b'},
-  {name:'ofi_15m',           v:295,  c:'#f59e0b'},
-];
-const maxV = FEATS[0].v;
-const fl = document.getElementById('feat-list');
-FEATS.forEach(f => {
-  const pct = Math.round(f.v / maxV * 100);
-  fl.innerHTML += `<div class="feat-row"><span style="color:#64748b;min-width:145px;font-size:11px;overflow:hidden;text-overflow:ellipsis">${f.name}</span><div class="feat-bar-bg"><div class="feat-bar-fill" style="width:${pct}%;background:${f.c}"></div></div><span style="font-size:11px;color:#475569;min-width:32px;text-align:right">${f.v}</span></div>`;
-});
-
 let eqChart = null, distChart = null;
 
 async function loadData() {
@@ -661,50 +644,43 @@ async function loadData() {
     const data = await res.json();
     const trades = data.trades || [];
     const stats  = data.stats  || {};
-    const bot    = data.bot_state || {};
 
-    document.getElementById('last-update').textContent =
-      'Last update: ' + (bot.last_run ? new Date(bot.last_run).toLocaleTimeString('en-GB') : '—') +
-      ' · Cycles: ' + (bot.n_runs || '—');
-
+    // 1. Mise à jour des compteurs principaux
     document.getElementById('m-total').textContent  = stats.n_total  || '0';
     document.getElementById('m-trades').textContent = stats.n_trades || '0';
-    document.getElementById('m-traderate').textContent = (stats.trade_rate || '0') + '% of cycles';
     document.getElementById('m-up').textContent    = stats.up_count   || '0';
     document.getElementById('m-down').textContent  = stats.down_count || '0';
 
+    // 2. Mise à jour dynamique du texte "since [Heure]"
     if (trades.length > 0) {
+      // On prend le trade le plus ancien (le dernier de la liste)
       const firstTradeDt = new Date(trades[trades.length - 1].timestamp);
-      document.getElementById('m-since').textContent = 'since ' + firstTradeDt.toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'}) + ' UTC';
+      const timeString = firstTradeDt.toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'}) + ' UTC';
+      document.getElementById('m-since').textContent = 'since ' + timeString;
+      document.getElementById('m-traderate').textContent = 'since ' + timeString;
+    } else {
+      document.getElementById('m-since').textContent = 'awaiting data...';
+      document.getElementById('m-traderate').textContent = 'awaiting data...';
     }
 
     const confirmed = trades.filter(t => t.trade === 'True');
-    const last = trades[0];
 
-    if (last) {
-      document.getElementById('poly-yes').textContent = last.poly_yes_mid ? (parseFloat(last.poly_yes_mid)*100).toFixed(1)+'%' : '—';
-      document.getElementById('poly-no').textContent  = last.poly_no_mid  ? (parseFloat(last.poly_no_mid)*100).toFixed(1)+'%'  : '—';
-      document.getElementById('poly-spread').textContent = last.poly_spread ? parseFloat(last.poly_spread).toFixed(3) : '—';
-      document.getElementById('poly-btc').textContent = last.btc_close_entry ? '$'+parseFloat(last.btc_close_entry).toLocaleString('en-US',{maximumFractionDigits:0}) : '—';
-      const dec = document.getElementById('poly-decision');
-      if (last.trade === 'True') {
-        dec.textContent = last.direction === 'UP' ? 'BTC UP' : 'BTC DOWN';
-        dec.className = last.direction === 'UP' ? 'up' : 'down';
-      } else {
-        dec.textContent = 'SKIP'; dec.className = 'neutral';
-      }
-    }
-
+    // 3. Mise à jour du Tableau Recent Cycles
     const tbody = document.getElementById('trade-tbody');
     tbody.innerHTML = '';
-    (trades.slice(0,10)).forEach(t => {
-      const pc = t.side==='YES'?'pill-up':t.side==='NO'?'pill-down':'pill-skip';
-      const dt = new Date(t.timestamp);
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</td><td><span class="pill ${pc}">${t.side||'SKIP'}</span></td><td>${t.lgbm_proba?(parseFloat(t.lgbm_proba)*100).toFixed(1)+'%':'—'}</td><td>${t.meta_proba&&t.meta_proba!=='None'?(parseFloat(t.meta_proba)*100).toFixed(1)+'%':'—'}</td><td>$${t.btc_close_entry?parseFloat(t.btc_close_entry).toLocaleString('en-US',{maximumFractionDigits:0}):'—'}</td>`;
-      tbody.appendChild(tr);
-    });
+    if (trades.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#64748b;padding:1.5rem">No cycles recorded yet.</td></tr>';
+    } else {
+      (trades.slice(0,10)).forEach(t => {
+        const pc = t.side==='YES'?'pill-up':t.side==='NO'?'pill-down':'pill-skip';
+        const dt = new Date(t.timestamp);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</td><td><span class="pill ${pc}">${t.side||'SKIP'}</span></td><td>${t.lgbm_proba?(parseFloat(t.lgbm_proba)*100).toFixed(1)+'%':'—'}</td><td>${t.meta_proba&&t.meta_proba!=='None'?(parseFloat(t.meta_proba)*100).toFixed(1)+'%':'—'}</td><td>$${t.btc_close_entry?parseFloat(t.btc_close_entry).toLocaleString('en-US',{maximumFractionDigits:0}):'—'}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
 
+    // 4. Graphique : Equity Curve
     let eq = 100;
     const eqLabels = ['Start'], eqData = [100], eqColors = [];
     confirmed.slice().reverse().forEach(t => {
@@ -722,9 +698,9 @@ async function loadData() {
     eqChart = new Chart(document.getElementById('eqChart'), {
       type: 'line',
       data: { labels: eqLabels, datasets: [{
-        data: eqData, borderColor: '#fb8b1e', borderWidth: 2, // Ligne orange
+        data: eqData, borderColor: '#fb8b1e', borderWidth: 2,
         pointRadius: eqData.map((_,i) => i===0?0:4),
-        pointBackgroundColor: ['#fb8b1e', ...eqColors], // Points oranges
+        pointBackgroundColor: ['#fb8b1e', ...eqColors],
         fill: false, tension: 0.3
       }]},
       options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
@@ -735,6 +711,7 @@ async function loadData() {
       }
     });
 
+    // 5. Graphique : Signal Distribution
     const upC = stats.up_count||0, dnC = stats.down_count||0, skC = stats.n_skips||0;
     if (distChart) distChart.destroy();
     distChart = new Chart(document.getElementById('distChart'), {
@@ -752,7 +729,7 @@ async function loadData() {
   }
 }
 
-// MODIFS JS
+// 6. Widget Polymarket
 async function loadPolymarketEmbed() {
   const container = document.getElementById("poly-live-container");
   if (!container) return;
@@ -766,33 +743,21 @@ async function loadPolymarketEmbed() {
       <figure
         class="polymarket-embed"
         id="polymarket-${slug}"
-        aria-label="Polymarket prediction market"
-        itemscope
-        itemtype="https://schema.org/WebPage"
-        style="position:relative;display:inline-block;margin:0">
+        style="position:relative;display:inline-block;margin:0;width:100%;">
         <iframe
-          title="Polymarket Prediction Market"
-          src="https://embed.polymarket.com/market?market=${slug}&theme=dark&border=true&height=300&t=${Date.now()}"
-          width="400"
-          height="300"
+          src="https://embed.polymarket.com/market?market=${slug}&theme=dark&border=true&height=300"
+          style="width:100%;height:300px;border:none;"
           frameborder="0"
           allowtransparency="true">
         </iframe>
-        <a href="https://polymarket.com/event/${slug}"
-          aria-label="View on Polymarket"
-          target="_blank"
-          rel="noopener"
-          style="position:absolute;top:16px;right:20px;width:120px;height:24px;z-index:10">
-        </a>
       </figure>
     `;
   } catch (e) {
-    container.innerHTML = `<div style="color:#64748b">Polymarket unavailable</div>`;
+    container.innerHTML = `<div style="color:#64748b;text-align:center;padding:2rem;">Awaiting next Polymarket window...</div>`;
   }
 }
 
-
-
+// Lancement automatique
 loadPolymarketEmbed();
 setInterval(loadPolymarketEmbed, 15000);
 
