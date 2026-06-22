@@ -416,10 +416,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .badge-live{display:inline-flex;align-items:center;gap:5px;background:#0f2922;color:#34d399;font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid #065f46}
 .badge-live::before{content:'';width:6px;height:6px;border-radius:50%;background:#34d399;animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.tabs{display:flex;gap:0;border-bottom:1px solid #1e2432;margin-bottom:2rem}
+.tabs{display:flex;gap:0;justify-content:center;border-bottom:1px solid #1e2432;margin-bottom:2rem}
 .tab{padding:10px 20px;font-size:13px;font-weight:500;color:#64748b;cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-1px}
 .tab:hover{color:#94a3b8}
-.tab.active{color:#f1f5f9;border-bottom:2px solid #3b82f6}
+.tab.active{color:#f1f5f9;border-bottom:2px solid #fb8b1e}
 .tab-content{display:none}.tab-content.active{display:block}
 .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem}
 .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1.5rem}
@@ -474,21 +474,20 @@ tr:last-child td{border-bottom:none}
 
 <div class="header">
   <div class="header-left">
-    <h1>BTC/Polymarket — Algorithmic Trading Bot</h1>
-    <p>LightGBM + Random Forest meta-labelling &middot; 15-minute binary prediction &middot; Paper trading</p>
-    <p id="last-update">Loading...</p>
+    <h1>Algorithmic Trading Bot <span style="color:#fb8b1e">— BTC 15 mins candles on Polymarket</span></h1>
+    <p>LightGBM + Random Forest meta-labelling &middot; Paper trading</p>
   </div>
   <span class="badge-live">Live</span>
 </div>
 
 <div class="tabs">
-  <button class="tab active" onclick="switchTab('approach',this)">Approach</button>
-  <button class="tab" onclick="switchTab('perf',this)">Performance</button>
+  <button class="tab" onclick="switchTab('approach',this)">Approach</button>
+  <button class="tab active" onclick="switchTab('perf',this)">Performance</button>
   <button class="tab" onclick="switchTab('profile',this)">About me</button>
 </div>
 
 <!-- ══════════════════════════ TAB 1 — APPROACH -->
-<div id="tab-approach" class="tab-content active">
+<div id="tab-approach" class="tab-content">
   <div class="card">
     <div class="card-title">From BTC 4H swing trading to Polymarket binary prediction</div>
     <div class="why">
@@ -521,7 +520,7 @@ tr:last-child td{border-bottom:none}
 </div>
 
 <!-- ══════════════════════════ TAB 2 — PERFORMANCE -->
-<div id="tab-perf" class="tab-content">
+<div id="tab-perf" class="tab-content active">
 
   <div class="grid-4">
     <div class="metric"><div class="metric-label">LGBM AUC OOS</div><div class="metric-value up">0.768</div><div class="metric-sub">5-fold purged CV</div></div>
