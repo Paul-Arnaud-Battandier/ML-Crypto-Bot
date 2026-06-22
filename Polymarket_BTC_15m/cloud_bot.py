@@ -29,6 +29,7 @@ import threading
 import traceback
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from flask import send_file
 
 
 # --- Ajout du répertoire racine au path ---
@@ -348,6 +349,14 @@ def ping():
     return "ok", 200
 
 
+@app.route("/download_csv")
+def download_csv():
+    """Permet de télécharger l'historique complet des trades."""
+    if TRADE_LOG.exists():
+        return send_file(TRADE_LOG, as_attachment=True, download_name="polymarket_trades.csv")
+    return "Aucune donnée pour le moment", 404
+
+
 @app.route("/health")
 def health():
     """Statut détaillé en JSON."""
@@ -474,7 +483,7 @@ tr:last-child td{border-bottom:none}
 
 <div class="header">
   <div class="header-left">
-    <h1>Algorithmic Trading Bot <span style="color:#fb8b1e">— BTC 15 mins candles on Polymarket</span></h1>
+    <h1><span style="color:#fb8b1e">Algorithmic Trading Bot</span> — BTC 15 mins candles on Polymarket</h1>
     <p>LightGBM + Random Forest meta-labelling &middot; Paper trading</p>
   </div>
   <span class="badge-live">Live</span>
@@ -523,14 +532,7 @@ tr:last-child td{border-bottom:none}
 <div id="tab-perf" class="tab-content active">
 
   <div class="grid-4">
-    <div class="metric"><div class="metric-label">LGBM AUC OOS</div><div class="metric-value up">0.768</div><div class="metric-sub">5-fold purged CV</div></div>
-    <div class="metric"><div class="metric-label">Directional ACC</div><div class="metric-value">68.5%</div><div class="metric-sub">vs 50% random</div></div>
-    <div class="metric"><div class="metric-label">Meta precision</div><div class="metric-value up">89.3%</div><div class="metric-sub">when RF confirms</div></div>
-    <div class="metric"><div class="metric-label">Signal filter</div><div class="metric-value">36%</div><div class="metric-sub">of signals kept</div></div>
-  </div>
-
-  <div class="grid-4">
-    <div class="metric"><div class="metric-label">Total cycles</div><div class="metric-value" id="m-total">—</div><div class="metric-sub">since deployment</div></div>
+    <div class="metric"><div class="metric-label">Total cycles</div><div class="metric-value" id="m-total">—</div><div class="metric-sub" id="m-since">since deployment</div></div>
     <div class="metric"><div class="metric-label">Trades placed</div><div class="metric-value" id="m-trades">—</div><div class="metric-sub" id="m-traderate">—</div></div>
     <div class="metric"><div class="metric-label">UP signals</div><div class="metric-value up" id="m-up">—</div><div class="metric-sub">confirmed by RF</div></div>
     <div class="metric"><div class="metric-label">DOWN signals</div><div class="metric-value down" id="m-down">—</div><div class="metric-sub">confirmed by RF</div></div>
@@ -538,22 +540,10 @@ tr:last-child td{border-bottom:none}
 
   <div class="grid-2">
     <div class="card">
-      <div class="card-title">Simulated equity curve — $10 flat bet</div>
-      <div class="chart-wrap" style="height:190px"><canvas id="eqChart" role="img" aria-label="Simulated equity curve">Equity curve.</canvas></div>
-      <div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:#475569">
-        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:2px;display:inline-block;background:#3b82f6"></span>Equity (starts $100)</span>
-        <span id="eq-summary" style="margin-left:auto;color:#64748b"></span>
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        Recent cycles
+        <a href="/download_csv" class="social-btn" style="padding:4px 10px;font-size:11px;margin:0;color:#fb8b1e;border-color:#fb8b1e;">&#x2193; Download CSV</a>
       </div>
-    </div>
-    <div class="card">
-      <div class="card-title">Feature importance — LightGBM top 8</div>
-      <div id="feat-list"></div>
-    </div>
-  </div>
-
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">Recent cycles</div>
       <table>
         <thead><tr>
           <th style="width:17%">Time UTC</th>
@@ -570,10 +560,25 @@ tr:last-child td{border-bottom:none}
       <div id="poly-live-container"></div>
     </div>
   </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Simulated equity curve — $10 flat bet</div>
+      <div class="chart-wrap" style="height:190px"><canvas id="eqChart"></canvas></div>
+      <div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:#475569">
+        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:2px;display:inline-block;background:#fb8b1e"></span>Equity (starts $100)</span>
+        <span id="eq-summary" style="margin-left:auto;color:#64748b"></span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Live Signal Distribution</div>
+      <div class="chart-wrap" style="height:170px;margin-top:10px;"><canvas id="distChart"></canvas></div>
+      <div id="dist-legend" style="display:flex;justify-content:center;gap:15px;margin-top:15px;font-size:11px;color:#cbd5e1"></div>
+    </div>
   </div>
 
   <div class="disclaimer">
-    Paper trading only — no real money involved. Predictions generated by a machine learning pipeline trained on 131k Binance 1m candles (90 days). AUC 0.768 and meta precision 89.3% measured out-of-sample via Purged K-Fold CV (Lopez de Prado). Past performance does not guarantee future results.
+    Paper trading only — no real money involved. Past performance does not guarantee future results.
   </div>
 </div>
 
@@ -668,6 +673,11 @@ async function loadData() {
     document.getElementById('m-up').textContent    = stats.up_count   || '0';
     document.getElementById('m-down').textContent  = stats.down_count || '0';
 
+    if (trades.length > 0) {
+      const firstTradeDt = new Date(trades[trades.length - 1].timestamp);
+      document.getElementById('m-since').textContent = 'since ' + firstTradeDt.toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'}) + ' UTC';
+    }
+
     const confirmed = trades.filter(t => t.trade === 'True');
     const last = trades[0];
 
@@ -712,9 +722,9 @@ async function loadData() {
     eqChart = new Chart(document.getElementById('eqChart'), {
       type: 'line',
       data: { labels: eqLabels, datasets: [{
-        data: eqData, borderColor: '#3b82f6', borderWidth: 2,
+        data: eqData, borderColor: '#fb8b1e', borderWidth: 2, // Ligne orange
         pointRadius: eqData.map((_,i) => i===0?0:4),
-        pointBackgroundColor: ['#3b82f6', ...eqColors],
+        pointBackgroundColor: ['#fb8b1e', ...eqColors], // Points oranges
         fill: false, tension: 0.3
       }]},
       options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
