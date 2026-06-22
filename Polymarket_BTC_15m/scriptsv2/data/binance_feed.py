@@ -146,7 +146,15 @@ def backfill(days: int = 90, force: bool = False) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Mode 2 : fetch live → DataFrame (utilisé par le bot)
 # ---------------------------------------------------------------------------
-def fetch_live(n_bars: int = LIVE_BARS) -> pd.DataFrame:
+_cache = {"df": None, "ts": None}
+
+def fetch_live(n_bars=90):
+    import time
+    now = time.time()
+    # Réutilise le cache si moins de 10 minutes
+    if _cache["df"] is not None and _cache["ts"] and (now - _cache["ts"]) < 600:
+        logger.info("fetch_live : données depuis cache")
+        return _cache["df"]    
     """
     Retourne les `n_bars` dernières bougies 1m complètes.
     La bougie en cours (non clôturée) est exclue.
@@ -167,7 +175,10 @@ def fetch_live(n_bars: int = LIVE_BARS) -> pd.DataFrame:
     # Exclure la bougie en cours (non clôturée)
     current_minute = datetime.now(timezone.utc).replace(second=0, microsecond=0)
     df = df[df["timestamp"] < pd.Timestamp(current_minute)]
-
+    
+    # Sauvegarder en cache avant de retourner
+    _cache["df"] = df
+    _cache["ts"] = now
     return df.tail(n_bars).reset_index(drop=True)
 
 
