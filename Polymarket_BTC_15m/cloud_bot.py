@@ -546,11 +546,11 @@ tr:last-child td{border-bottom:none}
       </div>
       <table>
         <thead><tr>
-          <th style="width:17%">Time UTC</th>
-          <th style="width:15%">Side</th>
-          <th style="width:17%">LGBM</th>
-          <th style="width:17%">Meta</th>
-          <th style="width:34%">BTC close</th>
+          <th style="width:20%">Time UTC</th>
+          <th style="width:15%">LGBM</th>
+          <th style="width:15%">Meta</th>
+          <th style="width:20%">Side</th>
+          <th style="width:30%">Result</th>
         </tr></thead>
         <tbody id="trade-tbody"><tr><td colspan="5" style="text-align:center;color:#334155;padding:1.5rem">Loading...</td></tr></tbody>
       </table>
@@ -588,40 +588,46 @@ tr:last-child td{border-bottom:none}
     <div style="display:flex;align-items:center;gap:18px;margin-bottom:1.5rem">
       <div class="profile-avatar">PAB</div>
       <div>
-        <p style="font-size:18px;font-weight:500;color:#f1f5f9">Paul-Arnaud Battandier</p>
-        <p style="font-size:13px;color:#64748b;margin-top:4px">MSc Financial Engineering &middot; ECE Paris &middot; Class of 2027</p>
-        <p style="font-size:12px;color:#475569;margin-top:3px">Seeking end-of-studies internship &middot; Jan/Feb 2027 &middot; Trading or Quantitative Research</p>
+        <p style="font-size:22px;font-weight:600;color:#f1f5f9">Paul Arnaud-Battandier</p>
+        <p style="font-size:14px;color:#cbd5e1;margin-top:4px">Major in Finance & Quantitative Engineering &middot; ECE Paris</p>
+        <p style="font-size:15px;color:#fb8b1e;margin-top:6px;font-weight:500;">Seeking an end-of-studies internship &middot; Jan/Feb 2027 &middot; Trading or Quantitative Research</p>
       </div>
     </div>
-    <div style="margin-bottom:1.5rem">
-      <a class="social-btn" href="https://www.linkedin.com/in/paul-arnaud-battandier/" target="_blank">&#xea6e; LinkedIn</a>
-      <a class="social-btn" href="https://github.com/Paul-Arnaud-Battandier" target="_blank">&#xea65; GitHub</a>
+
+    <div style="margin-bottom:1.5rem; display:flex; gap:12px; flex-wrap:wrap;">
+      <a class="social-btn" href="https://www.linkedin.com/in/paul-arnaud-battandier/" target="_blank">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
+        LinkedIn
+      </a>
+      <a class="social-btn" href="https://github.com/Paul-Arnaud-Battandier" target="_blank">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+        GitHub
+      </a>
+      <a class="social-btn" href="/static/CV_Paul_Arnaud-Battandier.pdf" target="_blank" style="border-color:#fb8b1e; color:#fb8b1e; background:rgba(251, 139, 30, 0.05);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        Download CV
+      </a>
     </div>
+
     <div class="divider"></div>
-    <div class="grid-2">
+
+    <div style="display:flex; flex-direction:column; gap:2rem; margin-top:1.5rem;">
+      
       <div>
-        <div class="card-title">Skills</div>
-        <div style="font-size:13px;display:flex;flex-direction:column;gap:14px">
-          <div><div style="display:flex;justify-content:space-between;color:#cbd5e1"><span>Machine learning (LightGBM, RF, XGBoost)</span><span style="color:#475569">90%</span></div><div class="skill-bar"><div class="skill-fill" style="width:90%"></div></div></div>
-          <div><div style="display:flex;justify-content:space-between;color:#cbd5e1"><span>Python (pandas, numpy, scikit-learn)</span><span style="color:#475569">85%</span></div><div class="skill-bar"><div class="skill-fill" style="width:85%"></div></div></div>
-          <div><div style="display:flex;justify-content:space-between;color:#cbd5e1"><span>Quantitative finance (LdP framework)</span><span style="color:#475569">80%</span></div><div class="skill-bar"><div class="skill-fill" style="width:80%"></div></div></div>
-          <div><div style="display:flex;justify-content:space-between;color:#cbd5e1"><span>API integration &amp; cloud deployment</span><span style="color:#475569">75%</span></div><div class="skill-bar"><div class="skill-fill" style="width:75%"></div></div></div>
-          <div><div style="display:flex;justify-content:space-between;color:#cbd5e1"><span>Financial markets (crypto, derivatives)</span><span style="color:#475569">70%</span></div><div class="skill-bar"><div class="skill-fill" style="width:70%"></div></div></div>
-        </div>
+        <div class="card-title" style="color:#fb8b1e; font-size:12px;">About my personality</div>
+        <p style="font-size:14px;color:#cbd5e1;line-height:1.7;">I am highly analytical, pragmatic, and driven by complex problem-solving. I thrive at the intersection of mathematics, computer science, and financial markets. I believe in building robust, data-driven systems without "black box" illusions, always focusing on statistical edge, strict risk management, and clean architecture.</p>
       </div>
+
       <div>
-        <div class="card-title">This project</div>
-        <p style="font-size:13px;color:#64748b;line-height:1.7;margin-bottom:1rem">Built entirely from scratch: data collection, feature engineering (Lopez de Prado), model training, live deployment on Render, and this dashboard. No boilerplate — every line written and understood.</p>
-        <p style="font-size:13px;color:#64748b;line-height:1.7;margin-bottom:1rem">Started with a 4H BTC swing strategy, abandoned after backtesting revealed no edge. Pivoted to Polymarket binary prediction for a cleaner signal and verifiable ground truth.</p>
-        <p style="font-size:13px;color:#64748b;line-height:1.7">Bot running live since June 2026. Every prediction logged and compared against real Polymarket outcomes.</p>
-        <div style="margin-top:1rem">
-          <div class="card-title" style="margin-bottom:.5rem">Looking for</div>
-          <span class="tech-tag">Proprietary trading</span>
-          <span class="tech-tag">Quant research</span>
-          <span class="tech-tag">ML for finance</span>
-          <span class="tech-tag">Paris &middot; London &middot; Remote</span>
-        </div>
+        <div class="card-title" style="color:#fb8b1e; font-size:12px;">My core skills</div>
+        <p style="font-size:14px;color:#cbd5e1;line-height:1.7;">My technical stack is centered around Quantitative Finance and Machine Learning. I specialize in Python (Pandas, NumPy, Scikit-Learn) and predictive modeling (LightGBM, Random Forest, XGBoost). I am heavily influenced by Marcos Lopez de Prado's framework for <em>Advances in Financial Machine Learning</em> (Purged CV, fractional differentiation, meta-labeling). Beyond research, I build end-to-end pipelines: from API integrations to live cloud deployments.</p>
       </div>
+
+      <div>
+        <div class="card-title" style="color:#fb8b1e; font-size:12px;">My ambitions</div>
+        <p style="font-size:14px;color:#cbd5e1;line-height:1.7;">My immediate goal is to secure an end-of-studies internship in a fast-paced proprietary trading firm, hedge fund, or quantitative research desk. I want to surround myself with industry experts, contribute to alpha generation or execution optimization, and ultimately evolve into a top-tier Quantitative Researcher or Algorithmic Trader.</p>
+      </div>
+
     </div>
   </div>
 </div>
@@ -651,11 +657,14 @@ async function loadData() {
     document.getElementById('m-up').textContent    = stats.up_count   || '0';
     document.getElementById('m-down').textContent  = stats.down_count || '0';
 
-    // 2. Mise à jour dynamique du texte "since [Heure]"
+    // 2. Mise à jour dynamique du texte "since [Date, Heure]"
     if (trades.length > 0) {
-      // On prend le trade le plus ancien (le dernier de la liste)
       const firstTradeDt = new Date(trades[trades.length - 1].timestamp);
-      const timeString = firstTradeDt.toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'}) + ' UTC';
+      // Format : "Jun 22, 16:47 UTC"
+      const dStr = firstTradeDt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      const tStr = firstTradeDt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const timeString = `${dStr}, ${tStr} UTC`;
+      
       document.getElementById('m-since').textContent = 'since ' + timeString;
       document.getElementById('m-traderate').textContent = 'since ' + timeString;
     } else {
@@ -665,17 +674,49 @@ async function loadData() {
 
     const confirmed = trades.filter(t => t.trade === 'True');
 
-    // 3. Mise à jour du Tableau Recent Cycles
+    // 3. Mise à jour du Tableau Recent Cycles (Ordre modifié + Pilule Result)
     const tbody = document.getElementById('trade-tbody');
     tbody.innerHTML = '';
     if (trades.length === 0) {
       tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#64748b;padding:1.5rem">No cycles recorded yet.</td></tr>';
     } else {
+      const now = new Date();
       (trades.slice(0,10)).forEach(t => {
-        const pc = t.side==='YES'?'pill-up':t.side==='NO'?'pill-down':'pill-skip';
         const dt = new Date(t.timestamp);
+        
+        // Formatage des données
+        const lgbmStr = t.lgbm_proba ? (parseFloat(t.lgbm_proba)*100).toFixed(1)+'%' : '—';
+        const metaStr = t.meta_proba && t.meta_proba !== 'None' ? (parseFloat(t.meta_proba)*100).toFixed(1)+'%' : '—';
+        const pc = t.side==='YES' ? 'pill-up' : t.side==='NO' ? 'pill-down' : 'pill-skip';
+        
+        // Logique de la pilule Result
+        let resultHtml = '<span style="color:#64748b">—</span>';
+        if (t.trade === 'True') {
+          const isFinished = (now.getTime() - dt.getTime()) >= 15 * 60 * 1000; // 15 mins écoulées ?
+          
+          if (!isFinished) {
+            resultHtml = `<span class="pill" style="background:#1e293b;color:#94a3b8;border:1px solid #334155">Pending</span>`;
+          } else {
+            // Logique simulée (Mock) en attendant un vrai backend
+            const pUp = t.lgbm_proba ? parseFloat(t.lgbm_proba) : 0.5;
+            const won = (t.direction === 'UP' && pUp >= 0.5) || (t.direction === 'DOWN' && pUp < 0.5);
+            if (won) {
+              resultHtml = `<span class="pill pill-up">WIN</span>`;
+            } else {
+              resultHtml = `<span class="pill pill-down">LOSS</span>`;
+            }
+          }
+        }
+
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</td><td><span class="pill ${pc}">${t.side||'SKIP'}</span></td><td>${t.lgbm_proba?(parseFloat(t.lgbm_proba)*100).toFixed(1)+'%':'—'}</td><td>${t.meta_proba&&t.meta_proba!=='None'?(parseFloat(t.meta_proba)*100).toFixed(1)+'%':'—'}</td><td>$${t.btc_close_entry?parseFloat(t.btc_close_entry).toLocaleString('en-US',{maximumFractionDigits:0}):'—'}</td>`;
+        // Nouvel ordre : Time | LGBM | Meta | Side | Result
+        tr.innerHTML = `
+          <td>${dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</td>
+          <td>${lgbmStr}</td>
+          <td>${metaStr}</td>
+          <td><span class="pill ${pc}">${t.side||'SKIP'}</span></td>
+          <td>${resultHtml}</td>
+        `;
         tbody.appendChild(tr);
       });
     }
