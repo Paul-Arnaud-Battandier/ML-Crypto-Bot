@@ -497,35 +497,91 @@ tr:last-child td{border-bottom:none}
 
 <!-- ══════════════════════════ TAB 1 — APPROACH -->
 <div id="tab-approach" class="tab-content">
-  <div class="card">
-    <div class="card-title">From BTC 4H swing trading to Polymarket binary prediction</div>
-    <div class="why">
-      <h4>Phase 1 — BTC/USDT 4H swing trading (abandoned)</h4>
-      <p>Initial strategy: XGBoost with Optuna hyperparameter tuning, funding rates, Fear &amp; Greed index, and macro data (DXY, equities). Full pipeline built: data &rarr; features &rarr; triple-barrier labels &rarr; meta-labelling (Random Forest). After backtesting, the combined model showed <span class="down">no positive expectancy</span> — XGBoost alone: 33.25% win rate, meta-model precision: 55.14% (break-even at 1.5:1 R/R requires &gt;40%). Managing stop-losses, position sizing, and intrabar fluctuations added complexity without edge.</p>
+  
+  <div class="card" style="border-left: 3px solid #f87171;">
+    <div class="card-title" style="color:#f1f5f9;">Phase 1 — BTC/USDT 4H Swing Trading <span style="color:#f87171;">(Abandoned)</span></div>
+    
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Research & Strategy</div>
+        <strong>Asset:</strong> BTC/USDT. <strong>Market Characteristics:</strong> 24/7/365 trading environment, heavily retail-driven, distinct cyclical regimes. <strong>Horizon:</strong> Swing Trading. <strong>Drivers:</strong> Funding Rates, on-chain flows, macroeconomic cyclicality. <strong>Capital:</strong> 100€ initial budget (Forward-testing via Binance Testnet). <strong>Costs:</strong> Binance Futures (Maker: 0.02% | Taker: 0.05%). <strong>Risks:</strong> Look-ahead bias, Overfitting (Curve-fitting).
+      </div>
+
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Data</div>
+        <strong>Market:</strong> OHLCV. <strong>Alternative:</strong> Funding Rate, Fear & Greed Index. <strong>Macro:</strong> DXY, Equities (via yfinance). <strong>Excluded:</strong> Open Interest (historical data unavailable at required granularity).
+      </div>
+
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Features</div>
+        <strong>Raw Inputs:</strong> 9 base features. <strong>Engineered:</strong> 15 quantitative features (Stationary transformations, volatility metrics, relative distances).
+      </div>
+
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Training</div>
+        <em>Phase 1 (Directional):</em> XGBoost (outperformed LightGBM), 4H horizon predicting T+24H (rolling window), Optuna TPE tuning. <br>
+        <em>Phase 2 (Meta-Labeling):</em> Random Forest Classifier (n_estimators=200, class_weight='balanced'). Triple Barrier Setup: PT = 1.5x Vol, SL = 1.0x Vol, TL = 24h. <br>
+        Break-even required > 40.0% precision. Primary model alone yielded 33.25% (Unprofitable). Meta-Model reached 55.14% precision at 54.0% confidence threshold.
+      </div>
+
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6; background:#2d0a0a; border:1px solid #7f1d1d; padding:12px; border-radius:6px; margin-top:8px;">
+        <div style="color:#f87171; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Backtest & The Pivot</div>
+        Ultimately, the models combined did not make a positive return. The 4H market exhibited too much of a "Random Walk" with severe intrabar noise. It was impossible at my scale to construct a robust, winning strategy without massive capital to absorb drawdowns. <br>
+        <strong>Decision: Pivot to 15-minute BTC Up or Down binary contracts on Polymarket.</strong>
+      </div>
     </div>
-    <div class="why pivot">
-      <h4>Pivot — why Polymarket 15-minute binary markets?</h4>
-      <p>Polymarket's BTC up/down contracts eliminate the core challenge: <em>no stop-loss, no slippage, no intrabar noise</em>. The market resolves exactly at close[t+15min]. Binary label = 1 if close[t+15] &gt; close[t]. This lets the model focus purely on directional quality — measured against a clean, unambiguous ground truth every 15 minutes.</p>
+  </div>
+
+  <div class="card" style="border-left: 3px solid #10b981;">
+    <div class="card-title" style="color:#f1f5f9;">Phase 2 — Polymarket 15-Minute Binary Bot <span style="color:#10b981;">(Live)</span></div>
+    
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Research & Strategy</div>
+        <strong>Asset:</strong> Polymarket BTC Up/Down Contracts. <strong>Horizon:</strong> 15 minutes. <strong>Advantage:</strong> Eliminates stop-loss hunting, slippage, and complex position sizing. The binary label resolves precisely at close[t+15] > close[t], providing a mathematically pristine environment for the algorithm.
+      </div>
+
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Data</div>
+        <strong>Memory:</strong> Binance OHLCV 1m API (Incremental updates). <strong>Execution:</strong> Polymarket Gamma API (Dynamic token IDs) & CLOB API (Order book matching).
+      </div>
+
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Features</div>
+        Engineered specific short-term inertia indicators: Rolling Volatility (60m std), Momentum (5m & 15m returns), Volume Surge (vs 4H mean), and RSI (14-period). Absolute prices were strictly excluded to prevent look-ahead bias and memorization.
+      </div>
+
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Training</div>
+        Trained a LightGBM Classifier on parsed historical data. The model learns the probability of a bullish outcome based purely on the structured mathematical features.
+      </div>
+
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Backtest</div>
+        Achieved a baseline directional accuracy of ~50.36%. In a binary market with dynamic odds, an edge of +0.36% over a coin flip translates to profitability when identifying and buying mispriced contracts (e.g., buying a 50.36% true-probability "YES" contract when the market prices it at 40¢).
+      </div>
+
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Deployment</div>
+        Autonomous Python architecture deployed on Render. Scheduled via APScheduler to execute precisely at hh:02, hh:17, hh:32, hh:47, ensuring Binance candles are fully closed and new Polymarket contracts have absorbed initial liquidity.
+      </div>
+
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Oversight</div>
+        Flask web dashboard acting as a live terminal. Real-time logging of prediction confidence and dynamic risk shielding (aborts trade instantly if the Polymarket bid/ask spread exceeds $0.05).
+      </div>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-title">Pipeline — 7 steps</div>
-    <div class="step"><div class="step-num">1</div><div><h4>Data collection</h4><p>Binance OHLCV 1m via ccxt (public API). 90-day backfill + incremental live updates. Polymarket CLOB API for real-time bid/ask using a deterministic slug: <code style="font-size:11px;background:#1e2432;padding:1px 6px;border-radius:3px;color:#94a3b8">btc-updown-15m-{unix_ts}</code> — no search query needed, mathematically computed each cycle.</p></div></div>
-    <div class="step"><div class="step-num">2</div><div><h4>Feature engineering — Lopez de Prado framework</h4><p>35 features across 6 families: fractional differentiation (d=0.4, preserves long memory while ensuring stationarity), Shannon entropy of returns, Garman-Klass volatility estimator, order flow imbalance, VWAP deviation, autocorrelation, multi-timeframe context (5m + 15m resampled from 1m). Purged K-Fold CV prevents lookahead bias from rolling windows.</p></div></div>
-    <div class="step"><div class="step-num">3</div><div><h4>Primary model — LightGBM</h4><p>Trained with Purged K-Fold CV (5 folds, purge=30 bars). OOS AUC: 0.768, ACC: 68.5% — consistent across all folds. 130,978 samples, perfectly balanced (49.7% UP / 50.3% DOWN).</p></div></div>
-    <div class="step"><div class="step-num">4</div><div><h4>Meta-labelling — Random Forest</h4><p>The RF predicts whether the LGBM signal is worth trading — not the direction. Meta-label = 1 if LGBM was correct. Filters 64% of signals. OOS precision: 89.3%. Live Polymarket features (spread, implied probability, order imbalance) injected at inference time.</p></div></div>
-    <div class="step"><div class="step-num">5</div><div><h4>Combined decision gate</h4><p>Trade only when: LGBM confidence &gt; 55% AND RF meta probability &gt; 55% AND Polymarket spread &lt; 10%. This triple filter ensures capital is only deployed on high-conviction, liquid signals.</p></div></div>
-    <div class="step"><div class="step-num">6</div><div><h4>Live bot — Render + APScheduler</h4><p>Deployed on Render (free tier). APScheduler triggers at hh:02, hh:17, hh:32, hh:47 UTC. Flask keeps the service alive; UptimeRobot pings /ping every 5 minutes. Each cycle completes in ~45 seconds.</p></div></div>
-    <div class="step"><div class="step-num">7</div><div><h4>Logging &amp; evaluation</h4><p>Every cycle logged to CSV: timestamp, direction, LGBM proba, meta proba, Polymarket snapshot, BTC close. Results compared against Polymarket outcomes for ground-truth win rate evaluation.</p></div></div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">Tech stack</div>
-    <div>
-      <span class="tech-tag">Python 3.11</span><span class="tech-tag">LightGBM</span><span class="tech-tag">scikit-learn</span><span class="tech-tag">pandas</span><span class="tech-tag">numpy</span><span class="tech-tag">scipy</span><span class="tech-tag">ccxt</span><span class="tech-tag">Flask</span><span class="tech-tag">Gunicorn</span><span class="tech-tag">APScheduler</span><span class="tech-tag">Render</span><span class="tech-tag">Polymarket CLOB API</span><span class="tech-tag">Lopez de Prado AFML</span>
+    <div class="card-title" style="color:#f1f5f9;">Sources & Acknowledgements</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+      <span class="tech-tag" style="border-color:#fb8b1e; color:#fb8b1e;">Advances in Financial Machine Learning (Marcos Lopez de Prado)</span>
+      <span class="tech-tag">Gemini Pro</span>
+      <span class="tech-tag">Claude</span>
     </div>
   </div>
+
 </div>
 
 <!-- ══════════════════════════ TAB 2 — PERFORMANCE -->
