@@ -30,6 +30,8 @@ import traceback
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+from Polymarket_BTC_15m.scriptsv2.data.polymarket_feed import get_current_15m_slug
+
 # --- Ajout du répertoire racine au path ---
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
@@ -373,6 +375,15 @@ def api_trades():
     })
 
 
+@app.route("/api/polymarket-current")
+def polymarket_current():
+    slug, window_start = get_current_15m_slug()
+    return jsonify({
+        "slug": slug,
+        "window_start": window_start.isoformat(),
+    })
+
+
 @app.route("/run_now")
 def run_now():
     """Déclenche un cycle manuellement (debug)."""
@@ -555,6 +566,8 @@ tr:last-child td{border-bottom:none}
       </table>
     </div>
     <div class="card">
+      <div class="card-title">Polymarket current window</div>
+      <div id="poly-live-container"></div>
       <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -770,6 +783,50 @@ async function loadData() {
     console.error('Error loading data:', e);
   }
 }
+
+# MODIFS JS
+async function loadPolymarketEmbed() {
+  const container = document.getElementById("poly-live-container");
+  if (!container) return;
+
+  try {
+    const res = await fetch("/api/polymarket-current");
+    const data = await res.json();
+    const slug = data.slug;
+
+    container.innerHTML = `
+      <figure
+        class="polymarket-embed"
+        id="polymarket-${slug}"
+        aria-label="Polymarket prediction market"
+        itemscope
+        itemtype="https://schema.org/WebPage"
+        style="position:relative;display:inline-block;margin:0">
+        <iframe
+          title="Polymarket Prediction Market"
+          src="https://embed.polymarket.com/market?market=${slug}&theme=dark&border=true&height=300&t=${Date.now()}"
+          width="400"
+          height="300"
+          frameborder="0"
+          allowtransparency="true">
+        </iframe>
+        <a href="https://polymarket.com/event/${slug}"
+          aria-label="View on Polymarket"
+          target="_blank"
+          rel="noopener"
+          style="position:absolute;top:16px;right:20px;width:120px;height:24px;z-index:10">
+        </a>
+      </figure>
+    `;
+  } catch (e) {
+    container.innerHTML = `<div style="color:#64748b">Polymarket unavailable</div>`;
+  }
+}
+
+
+
+loadPolymarketEmbed();
+setInterval(loadPolymarketEmbed, 30000);
 
 loadData();
 setInterval(loadData, 60000);
