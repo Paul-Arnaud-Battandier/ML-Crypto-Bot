@@ -30,7 +30,6 @@ import traceback
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-from Polymarket_BTC_15m.scriptsv2.data.polymarket_feed import get_current_15m_slug
 
 # --- Ajout du répertoire racine au path ---
 ROOT = Path(__file__).parent
@@ -60,6 +59,8 @@ DATA_DIR    = ROOT / "data"
 MODEL_DIR   = ROOT / "model"
 TRADE_LOG   = DATA_DIR / "trade_history.csv"
 DATA_DIR.mkdir(exist_ok=True)
+
+from scriptsv2.data.polymarket_feed import get_current_15m_slug
 
 # ---------------------------------------------------------------------------
 # État global du bot (thread-safe via lock)
