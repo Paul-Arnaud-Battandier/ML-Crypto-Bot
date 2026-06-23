@@ -1,6 +1,6 @@
 # Données et Modèles
 data/
-models/
+model/
 *.csv
 *.zip
 *.bst
@@ -14,8 +14,3 @@ __pycache__/
 # Environment
 .env
 *.pyc
-
-
-# Exeptions
-!scriptsv2/data/
-!scriptsv2/data/**

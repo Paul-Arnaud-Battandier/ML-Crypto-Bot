@@ -61,7 +61,7 @@ MODEL_DIR   = ROOT / "model"
 TRADE_LOG   = DATA_DIR / "trade_history.csv"
 DATA_DIR.mkdir(exist_ok=True)
 
-from scriptsv2.data.polymarket_feed import get_current_15m_slug
+from Polymarket_BTC_15m.scriptsv2.data.polymarket_feed import get_current_15m_slug
 
 # ---------------------------------------------------------------------------
 # État global du bot (thread-safe via lock)
@@ -148,7 +148,7 @@ def run_cycle():
         # ------------------------------------------------------------------
         # 1. Données Binance live
         # ------------------------------------------------------------------
-        from scriptsv2.data.binance_feed import fetch_live
+        from Polymarket_BTC_15m.scriptsv2.data.binance_feed import fetch_live
         df_live = fetch_live(n_bars=90)
 
         if df_live is None or len(df_live) < 35:
@@ -161,7 +161,7 @@ def run_cycle():
         # ------------------------------------------------------------------
         # 2. Features
         # ------------------------------------------------------------------
-        from scriptsv2.features.feature_pipeline import build_live_features
+        from Polymarket_BTC_15m.scriptsv2.features.feature_pipeline import build_live_features
         live_features = build_live_features(df_live)
 
         if live_features is None:
@@ -171,8 +171,8 @@ def run_cycle():
         # ------------------------------------------------------------------
         # 3. Chargement modèles
         # ------------------------------------------------------------------
-        from scriptsv2.training.train_lgbm import load_model
-        from scriptsv2.training.train_meta import load_meta_model
+        from Polymarket_BTC_15m.scriptsv2.training.train_lgbm import load_model
+        from Polymarket_BTC_15m.scriptsv2.training.train_meta import load_meta_model
 
         lgbm_payload = load_model(MODEL_DIR / "lgbm_model.pkl")
         meta_payload = load_meta_model(MODEL_DIR / "meta_model.pkl")
@@ -186,7 +186,7 @@ def run_cycle():
         # ------------------------------------------------------------------
         poly_snapshot = None
         try:
-            from scriptsv2.data.polymarket_feed import get_market_snapshot
+            from Polymarket_BTC_15m.scriptsv2.data.polymarket_feed import get_market_snapshot
             poly_snapshot = get_market_snapshot()
             if poly_snapshot:
                 logger.info(f"Polymarket | YES={poly_snapshot.get('yes_mid', 'N/A')} | "
@@ -197,7 +197,7 @@ def run_cycle():
         # ------------------------------------------------------------------
         # 5. Décision combinée
         # ------------------------------------------------------------------
-        from scriptsv2.training.train_meta import predict_combined
+        from Polymarket_BTC_15m.scriptsv2.training.train_meta import predict_combined
 
         decision = predict_combined(
             binance_features=live_features,
@@ -214,7 +214,7 @@ def run_cycle():
         # ------------------------------------------------------------------
         # 6. Logging CSV
         # ------------------------------------------------------------------
-        from scriptsv2.data.polymarket_feed import get_current_15m_slug
+        from Polymarket_BTC_15m.scriptsv2.data.polymarket_feed import get_current_15m_slug
         slug, window_start = get_current_15m_slug()
 
         record = {
@@ -476,6 +476,21 @@ tr:last-child td{border-bottom:none}
 .feat-bar-bg{flex:1;height:3px;background:#1e2432;border-radius:2px}
 .feat-bar-fill{height:3px;border-radius:2px}
 #last-update{font-size:11px;color:#334155;margin-top:4px}
+/* RESPONSIVE DESIGN (Mobiles & Tablettes) */
+@media (max-width: 768px) {
+  .header { flex-direction: column; align-items: flex-start; gap: 15px; position: relative; }
+  .badge-live { position: absolute; top: 0; right: 0; }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .grid-2 { grid-template-columns: 1fr; gap: 15px; }
+  .tabs { justify-content: space-between; }
+  .tab { padding: 10px 12px; font-size: 12px; flex: 1; text-align: center; }
+  
+  /* Permet au tableau de slider de gauche à droite sur mobile sans casser la page */
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+  
+  /* Ajuste l'en-tête de l'onglet Profile pour éviter le chevauchement */
+  #tab-profile > .card > div:first-child { flex-direction: column; align-items: flex-start; text-align: left; }
+}
 </style>
 </head>
 <body>

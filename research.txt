@@ -59,3 +59,44 @@ Pivot -> 5 minutes BTC Up or Down on Polymarket
 PIVOT :
 
 Research & Strategy:
+- Asset: BTC Binary Options ("Up or Down" 15m, Daily Close, 4PM ET).
+- Market Characteristics: Prediction market (Polygon network), binary outcome (1.00$ payout for YES, 0.00$ for NO), narrative-driven liquidity pools.
+- Trading Horizon: Ultra-short term (15m) to Intraday.
+- Underlying Drivers: Mathematical probability of short-term directional movement.
+- Execution & Capital: Polymarket API (Gamma & CLOB), 0% execution fees, risk strictly capped at premium paid (no liquidation risk).
+- Transaction Costs: Extreme Bid-Ask Spread penalty.
+- Primary Quantitative Risks: Phantom liquidity, API architecture constraints (Event vs Market ID), Microstructure risk (empty L2 orderbooks on directional algorithms).
+
+
+Data :
+- Market Data: Polymarket Gamma API (Metadata, Market Status, "Web Liquidity"), CLOB API (L2 Orderbook depth, BBO - Best Bid Offer).
+- Execution Data: Spread endpoint, L1 Imbalance (Top of Book volume).
+- Underlying Data: Real-time BTC prices for ML inference.
+
+
+Features :
+- Raw Inputs: Short-term OHLCV (1m/15m).
+- Engineered Predictors: High-frequency momentum, volatility contraction.
+
+
+Training :
+Phase 1: Primary Model (Probability Prediction)
+- Prediction Horizon: 15m to next daily close.
+- Algorithm Selection: LightGBM (LGBM) optimized for binary classification (Probability output).
+
+Phase 2: Meta-Labeling (Confidence Thresholding)
+- Architecture: Random Forest Classifier.
+- Output: Dynamic probability thresholding to match Polymarket share pricing (e.g., executing only if LGBM confidence > Market Ask Price).
+
+
+Live Diagnosis & Execution Analysis :
+- Diagnostic scripts (`poly_scanner.py`, `top_markets.py`) deployed to scan CLOB API in real-time.
+- Finding 1: Discrepancy between Web UI aggregated liquidity and actual CLOB API orderbook.
+- Finding 2: Lack of institutional Market Makers on pure short-term directional contracts.
+- Spread Analysis: Target market (BTC 4 PM ET) showed a spread of 0.98$ (Best Bid: 0.01$ | Best Ask: 0.99$).
+- Mathematical Expectancy: Deeply negative. Risking 0.99$ to gain 0.01$ requires a >99.1% win rate, making the strategy mathematically unviable despite a predictive edge.
+
+
+PIVOT :
+
+Research & Strategy:
