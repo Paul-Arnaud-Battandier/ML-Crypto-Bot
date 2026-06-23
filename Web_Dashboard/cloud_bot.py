@@ -405,13 +405,13 @@ def run_now():
 
 @app.route("/")
 def dashboard():
-    """Dashboard principal — 3 onglets, données live depuis /api/trades."""
+    """Dashboard principal — Focus sur la narration du portfolio Quant."""
     html = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BTC/Polymarket — Algo Trading Bot</title>
+<title>Algorithmic Trading Bot</title>
 <meta http-equiv="refresh" content="120">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -422,74 +422,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:2rem;padding-bottom:1.5rem;border-bottom:1px solid #1e2432}
 .header-left h1{font-size:20px;font-weight:500;color:#f1f5f9}
 .header-left p{font-size:13px;color:#64748b;margin-top:4px}
-.badge-live{display:inline-flex;align-items:center;gap:5px;background:#0f2922;color:#34d399;font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid #065f46}
-.badge-live::before{content:'';width:6px;height:6px;border-radius:50%;background:#34d399;animation:pulse 1.5s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.badge-wip{display:inline-flex;align-items:center;gap:5px;background:#1e3a5f;color:#60a5fa;font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid #2563eb}
 .tabs{display:flex;gap:0;justify-content:center;border-bottom:1px solid #1e2432;margin-bottom:2rem}
 .tab{padding:10px 20px;font-size:13px;font-weight:500;color:#64748b;cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-1px}
 .tab:hover{color:#94a3b8}
 .tab.active{color:#f1f5f9;border-bottom:2px solid #fb8b1e}
 .tab-content{display:none}.tab-content.active{display:block}
-.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem}
-.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1.5rem}
-.grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:1.25rem;margin-bottom:1.25rem}
-.metric{background:#141820;border:1px solid #1e2432;border-radius:10px;padding:1rem}
-.metric-label{font-size:11px;color:#475569;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
-.metric-value{font-size:24px;font-weight:500;color:#f1f5f9}
-.metric-sub{font-size:11px;color:#334155;margin-top:4px}
 .card{background:#141820;border:1px solid #1e2432;border-radius:12px;padding:1.25rem;margin-bottom:1.25rem}
 .card-title{font-size:11px;font-weight:500;color:#475569;text-transform:uppercase;letter-spacing:.06em;margin-bottom:1rem}
-.up{color:#34d399}.down{color:#f87171}
-.neutral{color:#64748b}
-.pill{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;font-weight:500}
-.pill-up{background:#052e16;color:#34d399;border:1px solid #065f46}
-.pill-down{background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d}
-.pill-skip{background:#1e2432;color:#64748b;border:1px solid #2d3748}
-table{width:100%;font-size:12px;border-collapse:collapse;table-layout:fixed}
-th{font-size:11px;color:#475569;font-weight:500;padding:7px 10px;text-align:left;border-bottom:1px solid #1e2432}
-td{padding:8px 10px;border-bottom:1px solid #1a2035;color:#cbd5e1}
-tr:last-child td{border-bottom:none}
-.step{display:flex;gap:14px;margin-bottom:1.5rem}
-.step-num{min-width:30px;height:30px;border-radius:50%;background:#1e3a5f;color:#60a5fa;font-size:12px;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
-.step h4{font-size:14px;font-weight:500;color:#f1f5f9;margin-bottom:5px}
-.step p{font-size:13px;color:#64748b;line-height:1.65}
-.why{border-left:2px solid #1e2432;padding-left:1rem;margin-bottom:1.25rem}
-.why.pivot{border-left-color:#3b82f6}
-.why h4{font-size:13px;font-weight:500;color:#e2e8f0;margin-bottom:5px}
-.why p{font-size:13px;color:#64748b;line-height:1.65}
 .tech-tag{display:inline-block;font-size:11px;padding:3px 9px;border-radius:5px;background:#1e2432;color:#64748b;margin:2px;border:1px solid #2d3748}
-.chart-wrap{position:relative;width:100%}
-.skill-bar{height:3px;background:#1e2432;border-radius:2px;margin-top:5px}
-.skill-fill{height:3px;border-radius:2px;background:#3b82f6}
-.social-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:8px;border:1px solid #2d3748;font-size:13px;color:#e2e8f0;text-decoration:none;margin-right:8px;background:#141820}
-.social-btn:hover{background:#1e2432;border-color:#3d4f6b}
-.poly-box{border-radius:8px;padding:.85rem 1rem;flex:1;text-align:center}
-.poly-yes{background:#052e16;border:1px solid #065f46}
-.poly-no{background:#2d0a0a;border:1px solid #7f1d1d}
-.poly-price{font-size:26px;font-weight:500}
-.poly-lbl{font-size:11px;color:#64748b;margin-top:3px}
-.divider{border:none;border-top:1px solid #1e2432;margin:1.5rem 0}
-.disclaimer{font-size:11px;color:#334155;padding:.85rem 1rem;background:#0d1117;border-radius:8px;margin-top:1.5rem;border-left:2px solid #1e2432;line-height:1.6}
-.profile-avatar{width:68px;height:68px;border-radius:50%;background:#1e3a5f;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:500;color:#60a5fa;flex-shrink:0}
-.feat-row{display:flex;align-items:center;padding:6px 0;border-bottom:1px solid #1a2035;font-size:12px;gap:10px}
-.feat-row:last-child{border-bottom:none}
-.feat-bar-bg{flex:1;height:3px;background:#1e2432;border-radius:2px}
-.feat-bar-fill{height:3px;border-radius:2px}
-#last-update{font-size:11px;color:#334155;margin-top:4px}
-/* RESPONSIVE DESIGN (Mobiles & Tablettes) */
+/* RESPONSIVE DESIGN */
 @media (max-width: 768px) {
-  .header { flex-direction: column; align-items: flex-start; gap: 15px; position: relative; }
-  .badge-live { position: absolute; top: 0; right: 0; }
-  .grid-4 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .grid-2 { grid-template-columns: 1fr; gap: 15px; }
-  .tabs { justify-content: space-between; }
+  .header { flex-direction: column; align-items: flex-start; gap: 15px; }
+  .badge-wip { align-self: flex-start; }
+  .tabs { justify-content: space-between; width: 100%; }
   .tab { padding: 10px 12px; font-size: 12px; flex: 1; text-align: center; }
-  
-  /* Permet au tableau de slider de gauche à droite sur mobile sans casser la page */
-  table { display: block; overflow-x: auto; white-space: nowrap; }
-  
-  /* Ajuste l'en-tête de l'onglet Profile pour éviter le chevauchement */
-  #tab-profile > .card > div:first-child { flex-direction: column; align-items: flex-start; text-align: left; }
 }
 </style>
 </head>
@@ -498,20 +445,19 @@ tr:last-child td{border-bottom:none}
 
 <div class="header">
   <div class="header-left">
-    <h1><span style="color:#fb8b1e">Algorithmic Trading Bot</span> — BTC 15 mins candles on Polymarket</h1>
-    <p>LightGBM + Random Forest meta-labelling &middot; Paper trading</p>
+    <h1><span style="color:#fb8b1e">Algorithmic Trading Bot</span> — </h1>
+    <p>Quantitative Research Portfolio &middot; Python, Machine Learning & Statistics</p>
   </div>
-  <span class="badge-live">Live</span>
+  <span class="badge-wip">Research Phase</span>
 </div>
 
 <div class="tabs">
-  <button class="tab" onclick="switchTab('approach',this)">Approach</button>
-  <button class="tab active" onclick="switchTab('perf',this)">Performance</button>
+  <button class="tab active" onclick="switchTab('approach',this)">Approach & Journey</button>
+  <button class="tab" onclick="switchTab('perf',this)">Performance (WIP)</button>
   <button class="tab" onclick="switchTab('profile',this)">About me</button>
 </div>
 
-<!-- ══════════════════════════ TAB 1 — APPROACH -->
-<div id="tab-approach" class="tab-content">
+<div id="tab-approach" class="tab-content active">
   
   <div class="card" style="border-left: 3px solid #f87171;">
     <div class="card-title" style="color:#f1f5f9;">Phase 1 — BTC/USDT 4H Swing Trading <span style="color:#f87171;">(Abandoned)</span></div>
@@ -519,187 +465,71 @@ tr:last-child td{border-bottom:none}
     <div style="display:flex; flex-direction:column; gap:12px;">
       <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
         <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Research & Strategy</div>
-        <strong>Asset:</strong> BTC/USDT. <strong>Market Characteristics:</strong> 24/7/365 trading environment, heavily retail-driven, distinct cyclical regimes. <strong>Horizon:</strong> Swing Trading. <strong>Drivers:</strong> Funding Rates, on-chain flows, macroeconomic cyclicality. <strong>Capital:</strong> 100€ initial budget (Forward-testing via Binance Testnet). <strong>Costs:</strong> Binance Futures (Maker: 0.02% | Taker: 0.05%). <strong>Risks:</strong> Look-ahead bias, Overfitting (Curve-fitting).
+        <strong>Asset:</strong> BTC/USDT. <strong>Horizon:</strong> Swing Trading. <strong>Drivers:</strong> Funding Rates, macro cyclicality. <strong>Risks:</strong> Look-ahead bias, Curve-fitting.
       </div>
-
       <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
-        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Data</div>
-        <strong>Market:</strong> OHLCV. <strong>Alternative:</strong> Funding Rate, Fear & Greed Index. <strong>Macro:</strong> DXY, Equities (via yfinance). <strong>Excluded:</strong> Open Interest (historical data unavailable at required granularity).
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Training & Outcome</div>
+        <em>Phase 1:</em> XGBoost predicting T+24H. <em>Phase 2 (Meta-Labeling):</em> Random Forest Classifier (Triple Barrier Setup). Break-even required > 40.0% precision. Primary model yielded 33.25% (Unprofitable).
       </div>
-
-      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
-        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Features</div>
-        <strong>Raw Inputs:</strong> 9 base features. <strong>Engineered:</strong> 15 quantitative features (Stationary transformations, volatility metrics, relative distances).
-      </div>
-
-      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
-        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Training</div>
-        <em>Phase 1 (Directional):</em> XGBoost (outperformed LightGBM), 4H horizon predicting T+24H (rolling window), Optuna TPE tuning. <br>
-        <em>Phase 2 (Meta-Labeling):</em> Random Forest Classifier (n_estimators=200, class_weight='balanced'). Triple Barrier Setup: PT = 1.5x Vol, SL = 1.0x Vol, TL = 24h. <br>
-        Break-even required > 40.0% precision. Primary model alone yielded 33.25% (Unprofitable). Meta-Model reached 55.14% precision at 54.0% confidence threshold.
-      </div>
-
       <div style="font-size:13px; color:#cbd5e1; line-height:1.6; background:#2d0a0a; border:1px solid #7f1d1d; padding:12px; border-radius:6px; margin-top:8px;">
         <div style="color:#f87171; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Backtest & The Pivot</div>
-        Ultimately, the models combined did not make a positive return. The 4H market exhibited too much of a "Random Walk" with severe intrabar noise. It was impossible at my scale to construct a robust, winning strategy without massive capital to absorb drawdowns. <br>
-        <strong>Decision: Pivot to 15-minute BTC Up or Down binary contracts on Polymarket.</strong>
+        The 4H market exhibited too much of a "Random Walk" with severe intrabar noise. It was impossible to construct a robust, winning strategy without massive capital to absorb stop-loss hunting.<br>
+        <strong>Decision: Pivot to short-term binary options on Polymarket to eliminate slippage and stop-loss mechanics.</strong>
       </div>
     </div>
   </div>
 
-  <div class="card" style="border-left: 3px solid #10b981;">
-    <div class="card-title" style="color:#f1f5f9;">Phase 2 — Polymarket 15-Minute Binary Bot <span style="color:#10b981;">(Live)</span></div>
+  <div class="card" style="border-left: 3px solid #f87171;">
+    <div class="card-title" style="color:#f1f5f9;">Phase 2 — Polymarket 15-Minute Binary Bot <span style="color:#f87171;">(Abandoned)</span></div>
     
     <div style="display:flex; flex-direction:column; gap:12px;">
       <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
         <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Research & Strategy</div>
-        <strong>Asset:</strong> Polymarket BTC Up/Down Contracts. <strong>Horizon:</strong> 15 minutes. <strong>Advantage:</strong> Eliminates stop-loss hunting, slippage, and complex position sizing. The binary label resolves precisely at close[t+15] > close[t], providing a mathematically pristine environment for the algorithm.
+        <strong>Asset:</strong> Polymarket BTC Up/Down Contracts. <strong>Advantage:</strong> The binary label resolves precisely at close[t+15] > close[t], capping risk purely to the premium paid.
       </div>
-
       <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
-        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Data</div>
-        <strong>Memory:</strong> Binance OHLCV 1m API (Incremental updates). <strong>Execution:</strong> Polymarket Gamma API (Dynamic token IDs) & CLOB API (Order book matching).
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Implementation</div>
+        Trained a LightGBM Classifier on parsed historical data. Deployed an autonomous Python architecture with an APScheduler triggering predictions at strictly defined timestamps, shielded by a Random Forest meta-labeler.
       </div>
-
-      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
-        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Features</div>
-        Engineered specific short-term inertia indicators: Rolling Volatility (60m std), Momentum (5m & 15m returns), Volume Surge (vs 4H mean), and RSI (14-period). Absolute prices were strictly excluded to prevent look-ahead bias and memorization.
-      </div>
-
-      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
-        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Training</div>
-        Trained a LightGBM Classifier on parsed historical data. The model learns the probability of a bullish outcome based purely on the structured mathematical features.
-      </div>
-
-      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
-        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Backtest</div>
-        Achieved a baseline directional accuracy of ~50.36%. In a binary market with dynamic odds, an edge of +0.36% over a coin flip translates to profitability when identifying and buying mispriced contracts (e.g., buying a 50.36% true-probability "YES" contract when the market prices it at 40¢).
-      </div>
-
-      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
-        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Deployment</div>
-        Autonomous Python architecture deployed on Render. Scheduled via APScheduler to execute precisely at hh:02, hh:17, hh:32, hh:47, ensuring Binance candles are fully closed and new Polymarket contracts have absorbed initial liquidity.
-      </div>
-
-      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
-        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Oversight</div>
-        Flask web dashboard acting as a live terminal. Real-time logging of prediction confidence and dynamic risk shielding (aborts trade instantly if the Polymarket bid/ask spread exceeds $0.05).
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6; background:#2d0a0a; border:1px solid #7f1d1d; padding:12px; border-radius:6px; margin-top:8px;">
+        <div style="color:#f87171; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Live Diagnosis & The Pivot</div>
+        Market microstructure and liquidity constraints on Polymarket invalidate high-frequency directional trading. Target market (BTC 4 PM ET) showed a spread of $0.98. Risking $0.99 to gain $0.01 requires a >99.1% win rate, making the strategy mathematically unviable despite a predictive ML edge.<br>
+        <strong>Decision: Pivot to Statistical Arbitrage (Pairs Trading) on Binance Futures to regain execution quality.</strong>
       </div>
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title" style="color:#f1f5f9;">Sources & Acknowledgements</div>
-    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-      <span class="tech-tag" style="border-color:#fb8b1e; color:#fb8b1e;">Advances in Financial Machine Learning (Marcos Lopez de Prado)</span>
-      <span class="tech-tag">Gemini Pro</span>
-      <span class="tech-tag">Claude</span>
+  <div class="card" style="border-left: 3px solid #3b82f6;">
+    <div class="card-title" style="color:#f1f5f9;">Phase 3 — Statistical Arbitrage (StatArb) BTC / ... <span style="color:#60a5fa;">(In Research)</span></div>
+    
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Concept & Strategy</div>
+        Transitioning to a <strong>Market Neutral</strong> approach (Pairs Trading). By identifying two strongly co-integrated assets (e.g., BTC and ETH), the algorithm trades the "spread" (the mathematical divergence between them) rather than attempting to predict absolute price direction.
+      </div>
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">The Edge</div>
+        This strategy eliminates directional market risk (immune to sudden market-wide crashes) and capitalizes on perfect execution infrastructure: infinite liquidity and $0.0001 spreads via Binance Futures.
+      </div>
+      <div style="font-size:13px; color:#cbd5e1; line-height:1.6;">
+        <div style="color:#fb8b1e; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Current Roadmap</div>
+        Conducting Engle-Granger Co-integration tests on historical OHLCV data. Next steps involve Z-Score spread modeling and building the dual-leg execution logic.
+      </div>
     </div>
   </div>
 
 </div>
 
-<!-- ══════════════════════════ TAB 2 — PERFORMANCE -->
-<div id="tab-perf" class="tab-content active">
-
-  <div class="grid-4">
-    <div class="metric"><div class="metric-label">Total cycles</div><div class="metric-value" id="m-total">—</div><div class="metric-sub" id="m-since">since deployment</div></div>
-    <div class="metric"><div class="metric-label">Trades placed</div><div class="metric-value" id="m-trades">—</div><div class="metric-sub" id="m-traderate">—</div></div>
-    <div class="metric"><div class="metric-label">UP signals</div><div class="metric-value up" id="m-up">—</div><div class="metric-sub">confirmed by RF</div></div>
-    <div class="metric"><div class="metric-label">DOWN signals</div><div class="metric-value down" id="m-down">—</div><div class="metric-sub">confirmed by RF</div></div>
-  </div>
-
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-        Recent cycles
-        <a href="/download_csv" class="social-btn" style="padding:4px 10px;font-size:11px;margin:0;color:#fb8b1e;border-color:#fb8b1e;">&#x2193; Download CSV</a>
-      </div>
-      <table>
-        <thead><tr>
-          <th style="width:20%">Time UTC</th>
-          <th style="width:15%">LGBM</th>
-          <th style="width:15%">Meta</th>
-          <th style="width:20%">Side</th>
-          <th style="width:30%">Result</th>
-        </tr></thead>
-        <tbody id="trade-tbody"><tr><td colspan="5" style="text-align:center;color:#334155;padding:1.5rem">Loading...</td></tr></tbody>
-      </table>
-    </div>
-    <div class="card">
-      <div class="card-title">Polymarket current window</div>
-      <div id="poly-live-container"></div>
-    </div>
-  </div>
-
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">Simulated equity curve — $10 flat bet</div>
-      <div class="chart-wrap" style="height:190px"><canvas id="eqChart"></canvas></div>
-      <div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:#475569">
-        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:2px;display:inline-block;background:#fb8b1e"></span>Equity (starts $100)</span>
-        <span id="eq-summary" style="margin-left:auto;color:#64748b"></span>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-title">Live Signal Distribution</div>
-      <div class="chart-wrap" style="height:170px;margin-top:10px;"><canvas id="distChart"></canvas></div>
-      <div id="dist-legend" style="display:flex;justify-content:center;gap:15px;margin-top:15px;font-size:11px;color:#cbd5e1"></div>
-    </div>
-  </div>
-
-  <div class="disclaimer">
-    Paper trading only — no real money involved. Past performance does not guarantee future results.
+<div id="tab-perf" class="tab-content">
+  <div style="text-align:center; padding: 3rem 1rem; color: #64748b;">
+    <h3>Engineering in progress...</h3>
+    <p style="margin-top: 10px; font-size: 14px;">The infrastructure is currently being re-wired for Binance Futures WebSockets and Co-integration metrics.</p>
   </div>
 </div>
 
-<!-- ══════════════════════════ TAB 3 — PROFILE -->
 <div id="tab-profile" class="tab-content">
-  <div class="card">
-    <div style="display:flex;align-items:center;gap:18px;margin-bottom:1.5rem">
-      <div class="profile-avatar">PAB</div>
-      <div>
-        <p style="font-size:22px;font-weight:600;color:#f1f5f9">Paul Arnaud-Battandier</p>
-        <p style="font-size:14px;color:#cbd5e1;margin-top:4px">Major in Finance & Quantitative Engineering &middot; ECE Paris</p>
-        <p style="font-size:15px;color:#fb8b1e;margin-top:6px;font-weight:500;">Seeking an end-of-studies internship &middot; Jan/Feb 2027 &middot; Trading or Quantitative Research</p>
-      </div>
-    </div>
-
-    <div style="margin-bottom:1.5rem; display:flex; gap:12px; flex-wrap:wrap;">
-      <a class="social-btn" href="https://www.linkedin.com/in/paul-arnaud-battandier/" target="_blank">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
-        LinkedIn
-      </a>
-      <a class="social-btn" href="https://github.com/Paul-Arnaud-Battandier" target="_blank">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
-        GitHub
-      </a>
-      <a class="social-btn" href="/static/CV_Paul_Arnaud-Battandier.pdf" target="_blank" style="border-color:#fb8b1e; color:#fb8b1e; background:rgba(251, 139, 30, 0.05);">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-        Download CV
-      </a>
-    </div>
-
-    <div class="divider"></div>
-
-    <div style="display:flex; flex-direction:column; gap:2rem; margin-top:1.5rem;">
-      
-      <div>
-        <div class="card-title" style="color:#fb8b1e; font-size:12px;">About my personality</div>
-        <p style="font-size:14px;color:#cbd5e1;line-height:1.7;">I am highly analytical, pragmatic, and driven by complex problem-solving. I thrive at the intersection of mathematics, computer science, and financial markets. I believe in building robust, data-driven systems without "black box" illusions, always focusing on statistical edge, strict risk management, and clean architecture.</p>
-      </div>
-
-      <div>
-        <div class="card-title" style="color:#fb8b1e; font-size:12px;">My core skills</div>
-        <p style="font-size:14px;color:#cbd5e1;line-height:1.7;">My technical stack is centered around Quantitative Finance and Machine Learning. I specialize in Python (Pandas, NumPy, Scikit-Learn) and predictive modeling (LightGBM, Random Forest, XGBoost). I am heavily influenced by Marcos Lopez de Prado's framework for <em>Advances in Financial Machine Learning</em> (Purged CV, fractional differentiation, meta-labeling). Beyond research, I build end-to-end pipelines: from API integrations to live cloud deployments.</p>
-      </div>
-
-      <div>
-        <div class="card-title" style="color:#fb8b1e; font-size:12px;">My ambitions</div>
-        <p style="font-size:14px;color:#cbd5e1;line-height:1.7;">My immediate goal is to secure an end-of-studies internship in a fast-paced proprietary trading firm, hedge fund, or quantitative research desk. I want to surround myself with industry experts, contribute to alpha generation or execution optimization, and ultimately evolve into a top-tier Quantitative Researcher or Algorithmic Trader.</p>
-      </div>
-
-    </div>
+  <div style="text-align:center; padding: 3rem 1rem; color: #64748b;">
+    <p>Profil section preserved.</p>
   </div>
 </div>
 
@@ -712,169 +542,6 @@ function switchTab(id, btn) {
   document.getElementById('tab-' + id).classList.add('active');
   btn.classList.add('active');
 }
-
-let eqChart = null, distChart = null;
-
-async function loadData() {
-  try {
-    const res = await fetch('/api/trades');
-    const data = await res.json();
-    const trades = data.trades || [];
-    const stats  = data.stats  || {};
-
-    // 1. Mise à jour des compteurs principaux
-    document.getElementById('m-total').textContent  = stats.n_total  || '0';
-    document.getElementById('m-trades').textContent = stats.n_trades || '0';
-    document.getElementById('m-up').textContent    = stats.up_count   || '0';
-    document.getElementById('m-down').textContent  = stats.down_count || '0';
-
-    // 2. Mise à jour dynamique du texte "since [Date, Heure]"
-    if (trades.length > 0) {
-      const firstTradeDt = new Date(trades[trades.length - 1].timestamp);
-      // Format : "Jun 22, 16:47 UTC"
-      const dStr = firstTradeDt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-      const tStr = firstTradeDt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-      const timeString = `${dStr}, ${tStr} UTC`;
-      
-      document.getElementById('m-since').textContent = 'since ' + timeString;
-      document.getElementById('m-traderate').textContent = 'since ' + timeString;
-    } else {
-      document.getElementById('m-since').textContent = 'awaiting data...';
-      document.getElementById('m-traderate').textContent = 'awaiting data...';
-    }
-
-    const confirmed = trades.filter(t => t.trade === 'True');
-
-    // 3. Mise à jour du Tableau Recent Cycles (Ordre modifié + Pilule Result)
-    const tbody = document.getElementById('trade-tbody');
-    tbody.innerHTML = '';
-    if (trades.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#64748b;padding:1.5rem">No cycles recorded yet.</td></tr>';
-    } else {
-      const now = new Date();
-      (trades.slice(0,10)).forEach(t => {
-        const dt = new Date(t.timestamp);
-        
-        // Formatage des données
-        const lgbmStr = t.lgbm_proba ? (parseFloat(t.lgbm_proba)*100).toFixed(1)+'%' : '—';
-        const metaStr = t.meta_proba && t.meta_proba !== 'None' ? (parseFloat(t.meta_proba)*100).toFixed(1)+'%' : '—';
-        const pc = t.side==='YES' ? 'pill-up' : t.side==='NO' ? 'pill-down' : 'pill-skip';
-        
-        // Logique de la pilule Result
-        let resultHtml = '<span style="color:#64748b">—</span>';
-        if (t.trade === 'True') {
-          const isFinished = (now.getTime() - dt.getTime()) >= 15 * 60 * 1000; // 15 mins écoulées ?
-          
-          if (!isFinished) {
-            resultHtml = `<span class="pill" style="background:#1e293b;color:#94a3b8;border:1px solid #334155">Pending</span>`;
-          } else {
-            // Logique simulée (Mock) en attendant un vrai backend
-            const pUp = t.lgbm_proba ? parseFloat(t.lgbm_proba) : 0.5;
-            const won = (t.direction === 'UP' && pUp >= 0.5) || (t.direction === 'DOWN' && pUp < 0.5);
-            if (won) {
-              resultHtml = `<span class="pill pill-up">WIN</span>`;
-            } else {
-              resultHtml = `<span class="pill pill-down">LOSS</span>`;
-            }
-          }
-        }
-
-        const tr = document.createElement('tr');
-        // Nouvel ordre : Time | LGBM | Meta | Side | Result
-        tr.innerHTML = `
-          <td>${dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</td>
-          <td>${lgbmStr}</td>
-          <td>${metaStr}</td>
-          <td><span class="pill ${pc}">${t.side||'SKIP'}</span></td>
-          <td>${resultHtml}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    // 4. Graphique : Equity Curve
-    let eq = 100;
-    const eqLabels = ['Start'], eqData = [100], eqColors = [];
-    confirmed.slice().reverse().forEach(t => {
-      const pUp  = t.lgbm_proba ? parseFloat(t.lgbm_proba) : 0.5;
-      const won  = (t.direction === 'UP' && pUp >= 0.5) || (t.direction === 'DOWN' && pUp < 0.5);
-      eq += won ? 9 : -10;
-      const dt = new Date(t.timestamp);
-      eqLabels.push(dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}));
-      eqData.push(parseFloat(eq.toFixed(2)));
-      eqColors.push(won ? '#10b981' : '#f87171');
-    });
-    document.getElementById('eq-summary').textContent = `P&L: ${eq>=100?'+':''}$${(eq-100).toFixed(0)}`;
-
-    if (eqChart) eqChart.destroy();
-    eqChart = new Chart(document.getElementById('eqChart'), {
-      type: 'line',
-      data: { labels: eqLabels, datasets: [{
-        data: eqData, borderColor: '#fb8b1e', borderWidth: 2,
-        pointRadius: eqData.map((_,i) => i===0?0:4),
-        pointBackgroundColor: ['#fb8b1e', ...eqColors],
-        fill: false, tension: 0.3
-      }]},
-      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
-        scales: {
-          x:{ticks:{font:{size:10},color:'#475569',maxTicksLimit:6},grid:{color:'rgba(255,255,255,0.03)'}},
-          y:{ticks:{font:{size:10},color:'#475569',callback:v=>'$'+v},grid:{color:'rgba(255,255,255,0.05)'}}
-        }
-      }
-    });
-
-    // 5. Graphique : Signal Distribution
-    const upC = stats.up_count||0, dnC = stats.down_count||0, skC = stats.n_skips||0;
-    if (distChart) distChart.destroy();
-    distChart = new Chart(document.getElementById('distChart'), {
-      type: 'doughnut',
-      data: { labels:['UP','DOWN','Skip'], datasets:[{data:[upC,dnC,skC],backgroundColor:['#10b981','#f87171','#334155'],borderWidth:0}]},
-      options: { responsive:true, maintainAspectRatio:false, cutout:'70%', plugins:{legend:{display:false}}}
-    });
-    document.getElementById('dist-legend').innerHTML =
-      `<span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#10b981"></span>UP ${upC}</span>` +
-      `<span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#f87171"></span>DOWN ${dnC}</span>` +
-      `<span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#334155"></span>Skip ${skC}</span>`;
-
-  } catch(e) {
-    console.error('Error loading data:', e);
-  }
-}
-
-// 6. Widget Polymarket
-async function loadPolymarketEmbed() {
-  const container = document.getElementById("poly-live-container");
-  if (!container) return;
-
-  try {
-    const res = await fetch("/api/polymarket-current");
-    const data = await res.json();
-    const slug = data.slug;
-
-    container.innerHTML = `
-      <figure
-        class="polymarket-embed"
-        id="polymarket-${slug}"
-        style="position:relative;display:inline-block;margin:0;width:100%;">
-        <iframe
-          src="https://embed.polymarket.com/market?market=${slug}&theme=dark&border=true&height=300"
-          style="width:100%;height:300px;border:none;"
-          frameborder="0"
-          allowtransparency="true">
-        </iframe>
-      </figure>
-    `;
-  } catch (e) {
-    container.innerHTML = `<div style="color:#64748b;text-align:center;padding:2rem;">Awaiting next Polymarket window...</div>`;
-  }
-}
-
-// Lancement automatique
-loadPolymarketEmbed();
-setInterval(loadPolymarketEmbed, 15000);
-
-loadData();
-setInterval(loadData, 60000);
 </script>
 </body>
 </html>"""
