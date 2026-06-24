@@ -272,21 +272,28 @@ def recover_position(exchange):
     print("🔍 Vérification des positions ouvertes sur Binance...")
     try:
         positions = exchange.fetch_positions([SYM1, SYM2])
-        open_pos  = {p['symbol']: p for p in positions if p['contracts'] and float(p['contracts']) != 0}
+        print(f"   Raw positions reçues : {len(positions)}")
+        for p in positions:
+            print(f"   → symbol={p.get('symbol')} | side={p.get('side')} | contracts={p.get('contracts')} | entryPrice={p.get('entryPrice')}")
+        open_pos = {
+            p['symbol']: p for p in positions
+            if p.get('contracts') is not None and float(p.get('contracts') or 0) != 0
+        }
 
-        aave_sym = SYM1.replace('/', '')  # 'AAVEUSDT'
-        eth_sym  = SYM2.replace('/', '')  # 'ETHUSDT'
+        # Binance retourne 'AAVE/USDT:USDT' — on cherche par correspondance partielle
+        aave_key = next((k for k in open_pos if 'AAVE' in k), None)
+        eth_key  = next((k for k in open_pos if 'ETH'  in k and 'AAVE' not in k), None)
 
-        has_aave = aave_sym in open_pos
-        has_eth  = eth_sym  in open_pos
+        has_aave = aave_key is not None
+        has_eth  = eth_key  is not None
 
         if not has_aave and not has_eth:
             print("✅ Aucune position ouverte — démarrage propre.")
             return "FLAT", 0, 0, 0, 0, 0
 
         if has_aave and has_eth:
-            aave_pos = open_pos[aave_sym]
-            eth_pos  = open_pos[eth_sym]
+            aave_pos = open_pos[aave_key]
+            eth_pos  = open_pos[eth_key]
 
             aave_size        = abs(float(aave_pos['contracts']))
             eth_size         = abs(float(eth_pos['contracts']))
