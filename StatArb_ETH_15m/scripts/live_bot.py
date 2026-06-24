@@ -264,6 +264,64 @@ def execute_trade(exchange, direction, current_prices, zscore, ml_prob,
         return "FLAT", 0, 0, 0, 0
 
 
+def recover_position(exchange):
+    """
+    Au démarrage, interroge Binance pour détecter une position déjà ouverte.
+    Retourne l'état reconstruit : position, direction, tailles, prix d'entrée.
+    """
+    print("🔍 Vérification des positions ouvertes sur Binance...")
+    try:
+        positions = exchange.fetch_positions([SYM1, SYM2])
+        open_pos  = {p['symbol']: p for p in positions if p['contracts'] and float(p['contracts']) != 0}
+
+        aave_sym = SYM1.replace('/', '')  # 'AAVEUSDT'
+        eth_sym  = SYM2.replace('/', '')  # 'ETHUSDT'
+
+        has_aave = aave_sym in open_pos
+        has_eth  = eth_sym  in open_pos
+
+        if not has_aave and not has_eth:
+            print("✅ Aucune position ouverte — démarrage propre.")
+            return "FLAT", 0, 0, 0, 0, 0
+
+        if has_aave and has_eth:
+            aave_pos = open_pos[aave_sym]
+            eth_pos  = open_pos[eth_sym]
+
+            aave_size        = abs(float(aave_pos['contracts']))
+            eth_size         = abs(float(eth_pos['contracts']))
+            entry_price_aave = float(aave_pos['entryPrice'])
+            entry_price_eth  = float(eth_pos['entryPrice'])
+
+            # Long AAVE + Short ETH = LONG_SPREAD
+            # Short AAVE + Long ETH = SHORT_SPREAD
+            if aave_pos['side'] == 'long' and eth_pos['side'] == 'short':
+                position      = "LONG_SPREAD"
+                direction_int = 1
+            elif aave_pos['side'] == 'short' and eth_pos['side'] == 'long':
+                position      = "SHORT_SPREAD"
+                direction_int = -1
+            else:
+                print(f"⚠️ Configuration inattendue : AAVE={aave_pos['side']} / ETH={eth_pos['side']}")
+                print("   Intervention manuelle recommandée.")
+                return "FLAT", 0, 0, 0, 0, 0
+
+            print(f"♻️  Position récupérée : {position}")
+            print(f"   AAVE : {aave_pos['side']} {aave_size} @ {entry_price_aave}")
+            print(f"   ETH  : {eth_pos['side']}  {eth_size} @ {entry_price_eth}")
+            return position, direction_int, aave_size, eth_size, entry_price_aave, entry_price_eth
+
+        else:
+            print("🚨 ALERTE : Une seule patte détectée — position non couverte !")
+            print("   Intervention manuelle recommandée.")
+            return "FLAT", 0, 0, 0, 0, 0
+
+    except Exception as e:
+        print(f"⚠️ Impossible de récupérer les positions : {e}")
+        print("   Démarrage en mode FLAT par sécurité.")
+        return "FLAT", 0, 0, 0, 0, 0
+
+
 def main():
     print("="*60)
     print("🟢 STAT-ARB BOT EN LIGNE (BINANCE DEMO)")
@@ -276,13 +334,10 @@ def main():
     initial_equity = log_equity(exchange, "FLAT", 0.0, 0.0, 0)
     print(f"✅ API connectée. Capital de départ : {initial_equity:.2f} USDT")
 
-    position = "FLAT"
-    direction_int = 0       # 1 = LONG_SPREAD, -1 = SHORT_SPREAD
-    pos_aave_size = 0
-    pos_eth_size  = 0
-    entry_price_aave = 0
-    entry_price_eth  = 0
-    entry_candle = 0        # Compteur de bougies à l'entrée
+    # Récupération automatique de la position si redémarrage en cours de trade
+    position, direction_int, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = recover_position(exchange)
+
+    entry_candle = 0        # Inconnu après restart, remis à 0
     candle_count = 0        # Compteur global de bougies
     num_trades_total = 0
 
