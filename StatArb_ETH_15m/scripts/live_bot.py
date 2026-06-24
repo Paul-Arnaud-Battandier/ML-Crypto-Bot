@@ -99,8 +99,8 @@ def init_exchange():
     return exchange
 
 def fetch_latest_data(exchange):
-    ohlcv1 = exchange.fetch_ohlcv(SYM1, '15m', limit=250)
-    ohlcv2 = exchange.fetch_ohlcv(SYM2, '15m', limit=250)
+    ohlcv1 = exchange.fetch_ohlcv(SYM1, '15m', limit=500)
+    ohlcv2 = exchange.fetch_ohlcv(SYM2, '15m', limit=500)
 
     df1 = pd.DataFrame(ohlcv1, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df2 = pd.DataFrame(ohlcv2, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -309,6 +309,12 @@ def main():
                 )
 
                 current_equity = log_equity(exchange, position, upnl_usdt, upnl_pct, num_trades_total)
+
+                if np.isnan(z):
+                    print("⚠️ Z-Score NaN — pas assez de données, on skip cette bougie.")
+                    time.sleep(60)
+                    continue
+
                 print(f"📊 Z-Score : {z:.2f} | Capital : {current_equity:.2f} USDT | PnL latent : {upnl_pct*100:+.3f}%")
 
                 # --- LOGIQUE DE SORTIE ---
