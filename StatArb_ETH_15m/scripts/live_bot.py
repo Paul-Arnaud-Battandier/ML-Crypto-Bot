@@ -27,7 +27,9 @@ SYM1, SYM2 = 'AAVE/USDT', 'ETH/USDT'
 TRADE_AMOUNT_USD = 50.0
 THRESHOLD_ML = 0.60
 WINDOW = 200
-SL_ZSCORE = 6.0          # Stop-Loss : fermeture forcée si Z s'écarte trop
+SL_ZSCORE  = 6.0         # Stop-Loss : fermeture forcée si Z s'écarte trop
+SL_PNL     = -0.05       # Stop-Loss : fermeture forcée si PnL latent < -5%
+TIME_LIMIT = 192         # Stop-Loss temporel : 48h max (192 bougies de 15m)
 
 def init_csv():
     """Crée les fichiers CSV s'ils n'existent pas avec leurs en-têtes"""
@@ -380,16 +382,30 @@ def main():
                 print(f"📊 Z-Score : {z:.2f} | Capital : {current_equity:.2f} USDT | PnL latent : {upnl_pct*100:+.3f}%")
 
                 # --- LOGIQUE DE SORTIE ---
+                candles_in_trade = candle_count - entry_candle
+
                 if position == "LONG_SPREAD":
-                    if z <= -SL_ZSCORE:
-                        print(f"🛑 STOP-LOSS DÉCLENCHÉ (Z = {z:.2f} <= -{SL_ZSCORE}). Fermeture forcée.")
+                    if candles_in_trade >= TIME_LIMIT:
+                        print(f"⏰ BARRIÈRE TEMPORELLE ({candles_in_trade} bougies = {candles_in_trade*15//60}h). Fermeture forcée.")
                         position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
                             exchange, "EXIT_LONG_SPREAD",
                             {'AAVE': aave_now, 'ETH': eth_now},
                             z, 0, pos_aave_size, pos_eth_size,
                             entry_price_aave, entry_price_eth,
                             entry_candle, candle_count,
-                            hedge_ratio, spread_value, exit_reason="STOP_LOSS"
+                            hedge_ratio, spread_value, exit_reason="TIME_LIMIT"
+                        )
+                        direction_int = 0
+                    elif z <= -SL_ZSCORE or upnl_pct <= SL_PNL:
+                        reason = "STOP_LOSS_Z" if z <= -SL_ZSCORE else "STOP_LOSS_PNL"
+                        print(f"🛑 STOP-LOSS DÉCLENCHÉ ({reason} | Z={z:.2f} | PnL={upnl_pct*100:.2f}%). Fermeture forcée.")
+                        position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                            exchange, "EXIT_LONG_SPREAD",
+                            {'AAVE': aave_now, 'ETH': eth_now},
+                            z, 0, pos_aave_size, pos_eth_size,
+                            entry_price_aave, entry_price_eth,
+                            entry_candle, candle_count,
+                            hedge_ratio, spread_value, exit_reason=reason
                         )
                         direction_int = 0
                     elif z >= 0:
@@ -405,15 +421,27 @@ def main():
                         direction_int = 0
 
                 elif position == "SHORT_SPREAD":
-                    if z >= SL_ZSCORE:
-                        print(f"🛑 STOP-LOSS DÉCLENCHÉ (Z = {z:.2f} >= +{SL_ZSCORE}). Fermeture forcée.")
+                    if candles_in_trade >= TIME_LIMIT:
+                        print(f"⏰ BARRIÈRE TEMPORELLE ({candles_in_trade} bougies = {candles_in_trade*15//60}h). Fermeture forcée.")
                         position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
                             exchange, "EXIT_SHORT_SPREAD",
                             {'AAVE': aave_now, 'ETH': eth_now},
                             z, 0, pos_aave_size, pos_eth_size,
                             entry_price_aave, entry_price_eth,
                             entry_candle, candle_count,
-                            hedge_ratio, spread_value, exit_reason="STOP_LOSS"
+                            hedge_ratio, spread_value, exit_reason="TIME_LIMIT"
+                        )
+                        direction_int = 0
+                    elif z >= SL_ZSCORE or upnl_pct <= SL_PNL:
+                        reason = "STOP_LOSS_Z" if z >= SL_ZSCORE else "STOP_LOSS_PNL"
+                        print(f"🛑 STOP-LOSS DÉCLENCHÉ ({reason} | Z={z:.2f} | PnL={upnl_pct*100:.2f}%). Fermeture forcée.")
+                        position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                            exchange, "EXIT_SHORT_SPREAD",
+                            {'AAVE': aave_now, 'ETH': eth_now},
+                            z, 0, pos_aave_size, pos_eth_size,
+                            entry_price_aave, entry_price_eth,
+                            entry_candle, candle_count,
+                            hedge_ratio, spread_value, exit_reason=reason
                         )
                         direction_int = 0
                     elif z <= 0:
