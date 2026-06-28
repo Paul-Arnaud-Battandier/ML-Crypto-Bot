@@ -5,17 +5,25 @@ import joblib
 import time
 import csv
 import os
+import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
-# --- Chemins et Clés ---
-ROOT_DIR = Path(__file__).parent.parent
-DATA_DIR = ROOT_DIR / "data"
+# ── Accès à config.py (à la racine du projet) ─────────────────
+ROOT_DIR = Path(__file__).parent.parent.parent  # ML_Crypto_Bot/
+sys.path.insert(0, str(ROOT_DIR))
+from config import PATHS
+
+# --- Chemins (centralisés dans config.py) ---
+DATA_DIR = PATHS['statarb_data']
 DATA_DIR.mkdir(exist_ok=True)
 
-MODEL_FILE = ROOT_DIR / "model" / "lgbm_statarb.pkl"
-EQUITY_CSV = DATA_DIR / "live_equity.csv"
-TRADES_CSV = DATA_DIR / "live_trades.csv"
+MODEL_FILE  = PATHS['statarb_model']
+EQUITY_CSV  = PATHS['live_equity']
+TRADES_CSV  = PATHS['live_trades']
+REGIME_JSON = PATHS['regime_json']
+PAIR_JSON   = PATHS['best_pair_json']
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -23,13 +31,49 @@ API_KEY = os.getenv('API_KEY')
 API_SECRET = os.getenv('API_SECRET')
 
 # --- Paramètres de Trading ---
-SYM1, SYM2 = 'AAVE/USDT', 'ETH/USDT'
 TRADE_AMOUNT_USD = 50.0
-THRESHOLD_ML = 0.60
-WINDOW = 200
-SL_ZSCORE  = 6.0         # Stop-Loss : fermeture forcée si Z s'écarte trop
-SL_PNL     = -0.05       # Stop-Loss : fermeture forcée si PnL latent < -5%
-TIME_LIMIT = 192         # Stop-Loss temporel : 48h max (192 bougies de 15m)
+THRESHOLD_ML     = 0.60
+WINDOW           = 200
+SL_ZSCORE        = 6.0    # Stop-Loss : fermeture forcée si Z s'écarte trop
+SL_PNL           = -0.05  # Stop-Loss : fermeture forcée si PnL latent < -5%
+TIME_LIMIT       = 192    # Stop-Loss temporel : 48h max (192 bougies de 15m)
+
+# --- Paire par défaut (si select_pair.py n'a pas encore tourné) ---
+DEFAULT_SYM1 = 'AAVE/USDT'
+DEFAULT_SYM2 = 'ETH/USDT'
+
+# Variables globales — mises à jour dans main() selon le régime
+SYM1 = DEFAULT_SYM1
+SYM2 = DEFAULT_SYM2
+
+# ── Lecture régime et paire ────────────────────────────────────
+def read_regime():
+    """Lit le régime actuel depuis Regime_Detector/data/current_regime.json"""
+    try:
+        with open(REGIME_JSON) as f:
+            data = json.load(f)
+        ts  = datetime.strptime(data['timestamp'], '%Y-%m-%d %H:%M:%S')
+        age = (datetime.now() - ts).total_seconds() / 3600
+        if age > 2:
+            print(f"  ⚠️  Régime obsolète ({age:.1f}h) — lance live_regime.py")
+        return data
+    except FileNotFoundError:
+        print("  ⚠️  Régime non disponible — lance compute_regime.py d'abord")
+        return None
+
+def read_best_pair():
+    """Lit la meilleure paire depuis Regime_Detector/data/best_pair.json"""
+    try:
+        with open(PAIR_JSON) as f:
+            data = json.load(f)
+        ts  = datetime.strptime(data['updated'], '%Y-%m-%d %H:%M:%S')
+        age = (datetime.now() - ts).total_seconds() / 3600 / 24
+        if age > 8:
+            print(f"  ⚠️  Scan paire obsolète ({age:.1f}j) — relance select_pair.py")
+        return data
+    except FileNotFoundError:
+        print(f"  ⚠️  Aucun scan paire — utilisation paire par défaut ({DEFAULT_SYM1}/{DEFAULT_SYM2})")
+        return None
 
 def init_csv():
     """Crée les fichiers CSV s'ils n'existent pas avec leurs en-têtes"""
@@ -343,12 +387,34 @@ def main():
     initial_equity = log_equity(exchange, "FLAT", 0.0, 0.0, 0)
     print(f"✅ API connectée. Capital de départ : {initial_equity:.2f} USDT")
 
+    # ── Lecture régime et meilleure paire ─────────────────────
+    global SYM1, SYM2
+    regime    = read_regime()
+    best_pair = read_best_pair()
+
+    # Sélection de la paire (best_pair si valide, sinon défaut)
+    if best_pair and best_pair.get('valid'):
+        SYM1 = best_pair['sym1']
+        SYM2 = best_pair['sym2']
+        print(f"📊 Paire sélectionnée : {SYM1} / {SYM2} (score={best_pair['score']})")
+    else:
+        SYM1, SYM2 = DEFAULT_SYM1, DEFAULT_SYM2
+        print(f"📊 Paire par défaut   : {SYM1} / {SYM2}")
+
+    # Vérification régime initial
+    if regime:
+        emoji = {'MEAN_REV':'🟢','TRENDING':'🟡','HIGH_VOL':'🔴','NEUTRAL':'⚪'}
+        r = regime['regime']
+        print(f"🎯 Régime actuel      : {emoji.get(r,'⚪')} {r} "
+              f"({'stat arb ✅' if regime['strategies']['stat_arb'] else 'stat arb ❌'})")
+
     # Récupération automatique de la position si redémarrage en cours de trade
     position, direction_int, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = recover_position(exchange)
 
-    entry_candle = 0        # Inconnu après restart, remis à 0
-    candle_count = 0        # Compteur global de bougies
+    entry_candle     = 0
+    candle_count     = 0
     num_trades_total = 0
+    last_regime_check = datetime.now()  # Pour refresh horaire
 
     while True:
         try:
@@ -356,6 +422,19 @@ def main():
             if now.minute % 15 == 0 and now.second < 10:
                 print(f"\n[{now.strftime('%H:%M:%S')}] 🔄 Scan du marché...")
                 candle_count += 1
+
+                # Refresh régime toutes les heures
+                if (datetime.now() - last_regime_check).total_seconds() >= 3600:
+                    regime = read_regime()
+                    best_pair = read_best_pair()
+                    if best_pair and best_pair.get('valid'):
+                        SYM1 = best_pair['sym1']
+                        SYM2 = best_pair['sym2']
+                    last_regime_check = datetime.now()
+                    if regime:
+                        emoji = {'MEAN_REV':'🟢','TRENDING':'🟡','HIGH_VOL':'🔴','NEUTRAL':'⚪'}
+                        r = regime['regime']
+                        print(f"  🎯 Régime : {emoji.get(r,'⚪')} {r}")
 
                 df = fetch_latest_data(exchange)
                 current_state = get_current_features(df)
@@ -458,7 +537,11 @@ def main():
 
                 # --- LOGIQUE D'ENTRÉE ---
                 elif position == "FLAT":
-                    if z <= -2.0 or z >= 2.0:
+                    # Vérification régime avant toute entrée
+                    if regime and not regime['strategies']['stat_arb']:
+                        r = regime['regime']
+                        print(f"  🚫 Stat arb désactivé (régime {r}) — aucune entrée.")
+                    elif z <= -2.0 or z >= 2.0:
                         print("⚠️ Anomalie détectée ! Consultation du ML...")
 
                         features = [
