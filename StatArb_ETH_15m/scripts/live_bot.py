@@ -7,6 +7,7 @@ import csv
 import os
 import json
 import sys
+import requests as _requests
 from datetime import datetime
 from pathlib import Path
 
@@ -109,6 +110,14 @@ def log_equity(exchange, position, unrealized_pnl_usdt, unrealized_pnl_pct, num_
                 round(unrealized_pnl_pct, 4),
                 num_trades_total
             ])
+        supabase_insert('live_equity', {
+            'timestamp'           : datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'equity_usdt'         : round(usdt_total, 4),
+            'position_status'     : position,
+            'unrealized_pnl_usdt' : round(unrealized_pnl_usdt, 4),
+            'unrealized_pnl_pct'  : round(unrealized_pnl_pct, 4),
+            'num_trades_total'    : num_trades_total,
+        })
         return usdt_total
     except Exception as e:
         print(f"Erreur de lecture du solde: {e}")
@@ -133,6 +142,21 @@ def log_trade(action, zscore, ml_prob, aave_price, eth_price,
             duration_candles if duration_candles is not None else '',
             exit_reason if exit_reason is not None else ''
         ])
+    supabase_insert('live_trades', {
+        'timestamp'       : datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'action'          : action,
+        'zscore'          : round(zscore, 4),
+        'ml_prob'         : round(ml_prob, 4),
+        'aave_price'      : aave_price,
+        'eth_price'       : eth_price,
+        'hedge_ratio'     : round(hedge_ratio, 6)   if hedge_ratio      is not None else None,
+        'spread_value'    : round(spread_value, 6)  if spread_value     is not None else None,
+        'pnl_pct'         : round(pnl_pct, 6)       if pnl_pct          is not None else None,
+        'duration_candles': duration_candles,
+        'exit_reason'     : exit_reason,
+        'sym1'            : SYM1,
+        'sym2'            : SYM2,
+    })
 
 def init_exchange():
     exchange = ccxt.binance({
@@ -143,6 +167,29 @@ def init_exchange():
     })
     exchange.enable_demo_trading(True)
     return exchange
+
+# ── Supabase logging ───────────────────────────────────────────
+_SB_URL = os.getenv('SUPABASE_URL', '')
+_SB_KEY = os.getenv('SUPABASE_KEY', '')
+
+def supabase_insert(table, data):
+    """Écrit une ligne dans Supabase — silencieux si erreur"""
+    if not _SB_URL or not _SB_KEY:
+        return
+    try:
+        _requests.post(
+            f"{_SB_URL}/rest/v1/{table}",
+            headers={
+                'apikey'       : _SB_KEY,
+                'Authorization': f'Bearer {_SB_KEY}',
+                'Content-Type' : 'application/json',
+                'Prefer'       : 'return=minimal',
+            },
+            json=data,
+            timeout=3,
+        )
+    except:
+        pass  # Ne jamais bloquer le bot pour un log
 
 def fetch_latest_data(exchange):
     ohlcv1 = exchange.fetch_ohlcv(SYM1, '15m', limit=500)

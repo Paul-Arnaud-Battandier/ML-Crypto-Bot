@@ -17,11 +17,13 @@ Peut être appelé :
 """
 
 import ccxt
+import requests as _requests
 import pandas as pd
 import numpy as np
 import json
 from datetime import datetime
 from pathlib import Path
+import os
 
 # ── Chemins ───────────────────────────────────────────────────
 ROOT_DIR    = Path(__file__).parent.parent
@@ -166,6 +168,7 @@ def get_current_regime(verbose=True):
     # 6. Sauvegarde
     with open(REGIME_FILE, 'w') as f:
         json.dump(result, f, indent=2)
+    _supabase_log_regime(result)
 
     # 7. Affichage
     if verbose:
@@ -206,6 +209,36 @@ def read_regime():
     except FileNotFoundError:
         print("⚠️  Aucun régime calculé — lance compute_regime.py d'abord")
         return None
+
+# ── Supabase logging ──────────────────────────────────────────
+_SB_URL = os.getenv('SUPABASE_URL', '')
+_SB_KEY = os.getenv('SUPABASE_KEY', '')
+
+def _supabase_log_regime(result):
+    if not _SB_URL or not _SB_KEY:
+        return
+    try:
+        _requests.post(
+            f"{_SB_URL}/rest/v1/regime_history",
+            headers={
+                'apikey': _SB_KEY,
+                'Authorization': f'Bearer {_SB_KEY}',
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal',
+            },
+            json={
+                'timestamp': result['timestamp'],
+                'regime'   : result['regime'],
+                'btc_vol'  : result['btc_vol'],
+                'eth_hurst': result['eth_hurst'],
+                'eth_adx'  : result['eth_adx'],
+                'btc_price': result['btc_price'],
+                'eth_price': result['eth_price'],
+            },
+            timeout=3,
+        )
+    except:
+        pass
 
 if __name__ == "__main__":
     get_current_regime(verbose=True)
