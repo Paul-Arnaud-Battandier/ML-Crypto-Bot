@@ -14,6 +14,14 @@ app = Flask(__name__)
 SUPABASE_URL = os.getenv('SUPABASE_URL', '')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY', '')
 
+# ── Lancement des bots en arrière-plan ──────────────────────────
+# ⚠️ Mettre RUN_BACKGROUND_JOBS=true UNIQUEMENT sur Render.
+#    En local, laisser à false (ou absent) pour éviter un double bot
+#    si live_bot.py tourne déjà dans un terminal séparé.
+if os.getenv('RUN_BACKGROUND_JOBS', 'false').lower() == 'true':
+    from background_jobs import start_background_jobs
+    start_background_jobs()
+
 
 def sb_get(table, params=''):
     """Appel REST Supabase — retourne [] si erreur"""
