@@ -6,6 +6,10 @@ model/
 *.bst
 *.pkl
 
+# Exception : le modèle ML doit être déployé sur Render
+!StatArb_ETH_15m/model/
+!StatArb_ETH_15m/model/lgbm_statarb.pkl
+
 # Python / IDE
 __pycache__/
 .ipynb_checkpoints/
