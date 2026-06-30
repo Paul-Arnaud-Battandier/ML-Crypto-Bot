@@ -12,6 +12,7 @@ en parallèle sur le même compte Binance.
 
 import sys
 import time
+import random
 import threading
 from pathlib import Path
 from datetime import datetime
@@ -23,14 +24,21 @@ sys.path.insert(0, str(ROOT_DIR / "StatArb_ETH_15m"  / "scripts"))
 
 
 def regime_loop():
-    """Recalcule le régime au démarrage puis toutes les heures."""
+    """Recalcule le régime au démarrage puis toutes les heures.
+    Backoff long en cas d'erreur réseau/ban pour ne pas spammer Binance."""
     from compute_regime import get_current_regime  # type: ignore
+
+    # Petit délai aléatoire au démarrage pour éviter les bursts
+    # si plusieurs redéploiements se chevauchent
+    time.sleep(random.uniform(2, 8))
 
     print("[BG] 🎯 Regime loop démarré")
     try:
         get_current_regime(verbose=True)
     except Exception as e:
         print(f"[BG] ⚠️ Erreur calcul régime initial : {e}")
+        print("[BG] ⏳ Pause 5min avant nouvelle tentative (évite spam API)")
+        time.sleep(300)
 
     while True:
         try:
@@ -42,20 +50,26 @@ def regime_loop():
                 time.sleep(20)
         except Exception as e:
             print(f"[BG] ❌ Erreur regime_loop : {e}")
-            time.sleep(30)
+            print("[BG] ⏳ Pause 5min avant retry (protection rate-limit)")
+            time.sleep(300)
 
 
 def trading_loop():
-    """Lance live_bot.py en continu, relance automatique si crash."""
+    """Lance live_bot.py en continu, avec backoff exponentiel si crash."""
     from live_bot import main as bot_main  # type: ignore
 
     print("[BG] 🤖 Trading loop démarré")
+    backoff = 30  # secondes, double à chaque crash, plafonné à 10min
+
     while True:
         try:
             bot_main()  # Contient déjà sa propre boucle infinie
+            backoff = 30  # reset si jamais main() retourne proprement
         except Exception as e:
-            print(f"[BG] ❌ Bot crashé : {e} — relance dans 30s")
-            time.sleep(30)
+            print(f"[BG] ❌ Bot crashé : {e}")
+            print(f"[BG] ⏳ Relance dans {backoff}s")
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 600)  # cap à 10 minutes
 
 
 def start_background_jobs():

@@ -2,7 +2,7 @@ flask==3.0.3
 gunicorn==22.0.0
 requests==2.32.3
 python-dotenv==1.0.1
-ccxt==4.3.78
+ccxt>=4.4.50
 pandas>=2.2.0
 numpy>=1.26.0
 joblib>=1.4.0
