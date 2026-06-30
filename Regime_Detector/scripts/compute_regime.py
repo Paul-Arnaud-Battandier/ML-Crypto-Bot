@@ -18,14 +18,14 @@ Peut être appelé :
 
 import ccxt
 import requests as _requests
+from dotenv import load_dotenv
+load_dotenv()
 import pandas as pd
 import numpy as np
 import json
 from datetime import datetime
 from pathlib import Path
 import os
-from dotenv import load_dotenv
-load_dotenv()
 
 # ── Chemins ───────────────────────────────────────────────────
 ROOT_DIR    = Path(__file__).parent.parent
