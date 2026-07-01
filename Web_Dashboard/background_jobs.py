@@ -33,9 +33,8 @@ def regime_loop():
     """
     from compute_regime import get_current_regime  # type: ignore
 
-    # Petit délai aléatoire au démarrage pour éviter les bursts
-    # si plusieurs redéploiements se chevauchent
-    time.sleep(random.uniform(2, 8))
+    # Démarre en premier — délai court
+    time.sleep(random.uniform(3, 8))
 
     print("[BG] 🎯 Regime loop démarré")
 
@@ -76,6 +75,9 @@ def trading_loop():
     """Lance live_bot.py en continu, avec backoff exponentiel si crash."""
     from live_bot import main as bot_main  # type: ignore
 
+    # Démarre en 2ème — décalé pour ne pas cumuler avec regime_loop
+    time.sleep(random.uniform(30, 45))
+
     print("[BG] 🤖 Trading loop démarré")
     backoff = 30  # secondes, double à chaque crash, plafonné à 10min
 
@@ -109,7 +111,8 @@ def funding_loop():
     from select_funding_pair import get_best_funding  # type: ignore
     from live_funding_bot import main as funding_main   # type: ignore
 
-    time.sleep(random.uniform(5, 12))
+    # Démarre en 3ème — décalé pour laisser respirer les 2 autres bots
+    time.sleep(random.uniform(90, 120))
     print("[BG] 💰 Funding loop démarré")
 
     try:

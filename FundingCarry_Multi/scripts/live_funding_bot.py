@@ -380,6 +380,15 @@ def main():
 
                 # ── PAS EN POSITION ───────────────────────────
                 elif state['position'] == 'FLAT':
+                    # Log équité même en FLAT pour que le dashboard ne soit pas vide
+                    log_equity(
+                        equity=5000 + state.get('funding_collected_usd', 0.0),
+                        position='FLAT',
+                        symbol=None,
+                        funding_collected=state.get('funding_collected_usd', 0.0),
+                        unrealized_pnl=0.0,
+                    )
+
                     # Vérification régime
                     if regime:
                         r = regime['regime']

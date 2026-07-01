@@ -15,6 +15,7 @@ import pandas as pd
 import numpy as np
 import json
 import os
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -121,6 +122,7 @@ def get_best_funding(verbose=True):
 
     results = []
     for sym in UNIVERSE:
+        time.sleep(0.5)  # Espace les appels pour éviter de dépasser le rate-limit weight
         rates, current_rate = fetch_funding_data(exchange, sym)
         if rates is None or current_rate is None:
             continue
