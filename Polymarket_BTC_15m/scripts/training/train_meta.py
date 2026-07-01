@@ -402,7 +402,7 @@ def predict_combined(
             reason      : str     — pourquoi on trade ou skip
         }
     """
-    from scriptsv2.training.train_lgbm import predict as lgbm_predict
+    from scripts.training.train_lgbm import predict as lgbm_predict
 
     # --- 1. Signal LGBM ---
     lgbm_result = lgbm_predict(binance_features, lgbm_payload)
@@ -421,7 +421,7 @@ def predict_combined(
         }
 
     # --- 3. Construction features meta ---
-    from scriptsv2.data.polymarket_feed import extract_poly_features
+    from scripts.data.polymarket_feed import extract_poly_features
     poly_feats = extract_poly_features(poly_snapshot) if poly_snapshot else POLY_FEATURE_DEFAULTS
 
     meta_feature_cols = meta_payload["feature_cols"]

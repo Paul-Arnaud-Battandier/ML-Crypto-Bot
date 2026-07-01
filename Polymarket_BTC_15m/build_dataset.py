@@ -48,7 +48,7 @@ def main():
     # ------------------------------------------------------------------
     # 1. Chargement / backfill Binance
     # ------------------------------------------------------------------
-    from scriptsv2.data.binance_feed import backfill
+    from scripts.data.binance_feed import backfill
 
     logger.info("Étape 1 : Chargement et mise à jour Binance 1m...")
     df_raw = backfill(days=90)
@@ -70,7 +70,7 @@ def main():
     # 2. Feature engineering
     # ------------------------------------------------------------------
     logger.info("Étape 2 : Calcul des features...")
-    from scriptsv2.features.feature_pipeline import build_features
+    from scripts.features.feature_pipeline import build_features
 
     df_features = build_features(df_raw)
 

@@ -421,7 +421,7 @@ if __name__ == "__main__":
         from pathlib import Path
         import sys
         sys.path.insert(0, str(ROOT))
-        from scriptsv2.features.feature_pipeline import build_features
+        from scripts.features.feature_pipeline import build_features
 
         np.random.seed(42)
         n = 2000
