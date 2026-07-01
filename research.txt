@@ -100,3 +100,210 @@ Live Diagnosis & Execution Analysis :
 PIVOT :
 
 Research & Strategy:
+- Concept: Market-Neutral architecture orchestrated by a macro Regime Detector,
+  switching capital allocation between two independent alpha sources depending
+  on detected market conditions (Mean-Reversion vs Trend/Stress).
+- Asset (StatArb leg): AAVE/USDT vs ETH/USDT (Binance Futures, cointegrated pair).
+- Asset (Carry leg): Best-ranked perpetual from a 20-symbol funding rate universe
+  (Binance Spot + Futures).
+- Trading Horizon: 15m (StatArb) / 8h payment cycles (Funding Carry).
+- Underlying Drivers: Statistical cointegration + mean-reversion (StatArb),
+  Perpetual funding rate structure (Carry).
+- Execution & Capital: Binance Demo Trading (Spot + Futures paper wallet).
+- Transaction Costs: Binance Futures (Taker: 0.05%), Binance Spot (Taker: 0.10%).
+- Primary Quantitative Risks: Beta mismatch on hedge ratio, funding rate reversal,
+  regime misclassification, rate-limit/IP-ban constraints on free-tier hosting.
+
+
+════════════════════════════════════════════════════════════════════════════
+LAYER 0 : REGIME DETECTOR
+════════════════════════════════════════════════════════════════════════════
+
+Research:
+- Purpose: Macro filter deciding which strategy (if any) is allowed to trade
+  at any given time. Not a strategy itself — an allocation layer.
+- Hypothesis: BTC realized volatility captures systemic stress independently
+  of ETH's own price action; ETH's own Hurst/ADX captures whether the
+  DeFi/L2/altcoin ecosystem it anchors is currently mean-reverting or trending
+  — a more relevant proxy for AAVE/ETH-style pairs than BTC alone.
+
+Data:
+- Market Data: BTC/USDT & ETH/USDT OHLCV 1h (Binance Futures).
+- No alternative/macro data — deliberately kept minimal for reliability and
+  low API weight cost (critical after hitting Binance rate-limit bans).
+
+Features:
+- Realized Volatility (24h rolling, annualized) on BTC.
+- Hurst Exponent (100h rolling window) on ETH — <0.5 signals mean-reversion.
+- ADX (14-period) on ETH — trend strength confirmation.
+
+Training:
+- No ML — rule-based classifier. Thresholds calibrated via percentile
+  analysis on 1 year of hourly data (P25/P50/P75 of each indicator) rather
+  than arbitrary values.
+- Final thresholds: BTC vol > 0.60 → HIGH_VOL | ETH Hurst > 0.47 & ADX > 28
+  → TRENDING | ETH Hurst < 0.43 & ADX < 36 → MEAN_REV | else NEUTRAL.
+
+Backtest:
+- Walk-forward validation across 3 distinct 4-month periods (including a
+  -38% BTC drawdown period) rather than a single in-sample fit.
+- Result: Hurst separation between MEAN_REV and TRENDING regimes stayed at
+  0.21–0.23 across all 3 periods — confirms the classifier generalizes
+  across market direction, not just the period it was calibrated on.
+- Regime distribution close to design target: MEAN_REV 32%, TRENDING 19%,
+  HIGH_VOL 12%, NEUTRAL 37%.
+
+Deployment:
+- Standalone background thread, recomputes hourly, writes state to a shared
+  JSON + Supabase table consumed by both downstream strategies.
+
+Oversight:
+- Live regime label displayed on the public dashboard in real time.
+- A live divergence event (AAVE/ETH trending out of the tradable Hurst range
+  post-deployment) was correctly detected and used to suppress new StatArb
+  entries — validated the filter in a non-simulated setting, not just backtest.
+
+
+════════════════════════════════════════════════════════════════════════════
+LAYER 1 : STATISTICAL ARBITRAGE (Pairs Trading) — active in MEAN_REV
+════════════════════════════════════════════════════════════════════════════
+
+Research:
+- Concept: Pairs trading — trade the mean-reverting spread between two
+  cointegrated assets instead of predicting absolute price direction.
+  Zero directional market exposure.
+- Pair candidate universe: DeFi/L1/L2 tokens vs ETH (economic rationale:
+  shared sector beta), plus BTC/ETH as a macro reference pair.
+
+Data:
+- Market Data: AAVE/USDT & ETH/USDT OHLCV 15m (180-day rolling history,
+  Binance).
+
+Features:
+- Cointegration spread Z-Score (200-candle rolling mean/std).
+- Z-Score momentum (1h & 4h derivatives).
+- Directional returns (1h) & realized volatility (4h) on both legs.
+- Dynamic hedge ratio via Rolling OLS (200-candle window) — replaces a naive
+  static mean-price ratio, avoids stale-ratio drift as prices move.
+
+Training (Meta-Labeling):
+- Pair selection: Engle-Granger cointegration (p-value < 0.05) + Hurst
+  Exponent (< 0.5) + out-of-sample ADF stationarity test.
+- Architecture: LightGBM Classifier (n_estimators=200, max_depth=5,
+  class_weight='balanced').
+- Labeling: Lopez de Prado Triple Barrier Method — TP: Z→0, SL: |Z|≥4,
+  Time Limit: 24h (96 candles).
+- Entry Threshold: ML confidence > 60%.
+
+Backtest:
+- Baseline win-rate (raw statistical engine, no ML filter): 58.71%.
+- ML-filtered win-rate: 88.67% out-of-sample (+5.60% absolute over the raw
+  engine on the same period) — 150 trades validated / 431 opportunities
+  proposed by the Z-Score engine.
+- Retested on refreshed 180-day data (6 months later): raw win-rate dropped
+  to 36.78%, ML-filtered backtest PnL turned negative (-6.74%) — an honest
+  regime-dependence finding, not discarded, which directly motivated
+  building the Regime Detector (Layer 0) instead of trusting a single
+  static backtest indefinitely.
+
+Deployment:
+- Live on Binance Demo Trading (Futures), 15m scan cycle.
+- Three independent stop-loss layers: Z-Score (|Z|≥6, black-swan protection),
+  PnL (-5% of exposed capital, beta-mismatch protection — added after
+  observing a live divergence where Z-Score improved while PnL kept
+  deteriorating due to imperfect hedge coverage), Time Barrier (48h).
+- Position recovery via live Binance API query on bot/service restart
+  (handles Render redeploys without losing track of an open position).
+- Weekly automated re-scan across 11 candidate pairs to adapt to structural
+  market changes rather than trading a single hardcoded pair indefinitely.
+
+Oversight:
+- All trades, rejections (ML confidence < 60%), and stop-loss triggers
+  logged to Supabase with full context (Z-Score, ML probability, hedge
+  ratio, exit reason) and displayed on the public dashboard.
+- Equity curve and win-rate tracked continuously against the backtest
+  baseline to detect live/backtest drift early.
+
+
+════════════════════════════════════════════════════════════════════════════
+LAYER 2 : FUNDING RATE CARRY — active in HIGH_VOL / NEUTRAL
+════════════════════════════════════════════════════════════════════════════
+
+Research:
+- Concept: Delta-neutral carry — Long Spot + Short Perpetual on the same
+  asset. Profit derived purely from the funding rate paid by leveraged
+  longs every 8h; zero directional exposure.
+- Rationale for regime placement: unlike StatArb, carry does not depend on
+  mean-reversion — it profits from persistent long-side leverage demand,
+  which typically increases (not decreases) during high-volatility/stress
+  periods, making it a natural complement to StatArb rather than a
+  competitor for the same regime.
+
+Data:
+- Funding rate history (30-day, per-8h payments) via Binance Futures API,
+  across a 20-symbol liquid perpetual universe.
+- Spot vs Perpetual basis (price gap) checked at entry to assess
+  slippage/convergence risk.
+
+Features:
+- Current funding rate & annualized APR.
+- 30-day average funding rate & annualized APR.
+- Positive-payment consistency (% of the last 30d payments that were
+  positive) — a proxy for signal stability, not just average magnitude.
+
+Training:
+- No ML — deterministic filter, but preceded by an explicit fee/breakeven
+  analysis before any code was written: round-trip cost (entry + exit,
+  both legs, standard fee tier) = 0.30%; breakeven holding period =
+  round_trip_fee / daily_funding_rate.
+- Selection thresholds: 30-day APR > 4%, positive-payment consistency > 60%,
+  current funding rate > 0 (do not enter against the prevailing flow).
+
+Backtest:
+- Applied the selection filter to the live 20-symbol universe at research
+  time: only 1 of 20 symbols (UNI/USDT) cleared the bar — APR 30d 4.47%,
+  80% positive-payment consistency, breakeven ≈ 24.5 days. Confirms the
+  filter is restrictive by design, not cosmetic — most scanned funding
+  spikes were recent-only and did not survive the 30-day consistency check.
+
+Deployment:
+- Checked every 8h at Binance funding payment timestamps (00:00 / 08:00 /
+  16:00 UTC) — not continuously, consistent with the strategy's structurally
+  longer holding horizon.
+- Exit trigger: rolling average of the last 5 funding payments turns
+  negative, OR 45-day maximum holding period reached — avoids over-reacting
+  to a single negative payment in an otherwise favorable trend.
+- Position state persisted to JSON to survive bot/service restarts.
+- Daily automated re-scan of the funding universe (independent thread) to
+  keep the selected pair current without blocking the live position loop.
+
+Oversight:
+- Funding collected per cycle, cumulative funding, and unrealized basis PnL
+  logged to Supabase every 8h (including idle FLAT cycles, so the dashboard
+  reflects "no opportunity found" as clearly as an active position).
+- All entries/exits logged with basis %, funding APR at execution, and exit
+  reason, displayed on the public dashboard.
+
+
+════════════════════════════════════════════════════════════════════════════
+REJECTED : CROSS-SECTIONAL MOMENTUM (research only, not deployed)
+════════════════════════════════════════════════════════════════════════════
+
+Research:
+- Concept: Rank a 25-symbol universe by trailing return, Long the top N,
+  Short the bottom N, weekly rebalance, equal-weight, market-neutral.
+- Rationale: intended to fill the TRENDING regime slot left idle by
+  StatArb/Carry, completing a three-strategy regime-switching architecture.
+
+Data:
+- Market Data: Daily close, 25 liquid perpetuals, ~1 year history (Binance).
+
+Features:
+- Trailing return over a formation lookback window (14/21/28/35 days
+  tested), most recent day excluded (short-term reversal control).
+
+Decision: Rejected after quantitative validation. Documented here as a
+deliberate negative result rather than silently discarded — the TRENDING
+regime slot remains intentionally unallocated pending a future strategy
+that clears the same fee-adjusted, walk-forward validation bar as StatArb
+and Funding Carry.
