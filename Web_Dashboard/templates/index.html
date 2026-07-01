@@ -420,4 +420,581 @@ if (values.length > 0) {
 }
 </script>
 </body>
+</html><!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Algorithmic Trading Bot</title>
+    <meta http-equiv="refresh" content="30">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}
+        .container{max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
+        .header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:2rem;padding-bottom:1.5rem;border-bottom:1px solid #1e2432}
+        .header-left h1{font-size:20px;font-weight:500;color:#f1f5f9}
+        .header-left p{font-size:13px;color:#64748b;margin-top:4px}
+        .badge-live{display:inline-flex;align-items:center;gap:5px;background:#1e3a5f;color:#60a5fa;font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid #2563eb}
+        .tabs{display:flex;gap:0;justify-content:center;border-bottom:1px solid #1e2432;margin-bottom:2rem}
+        .tab{padding:10px 20px;font-size:13px;font-weight:500;color:#64748b;cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+        .tab:hover{color:#94a3b8}
+        .tab.active{color:#f1f5f9;border-bottom:2px solid #fb8b1e}
+        .tab-content{display:none}.tab-content.active{display:block}
+        .subtab-content{display:none}.subtab-content.active{display:block}
+
+        /* Cards */
+        .card{background:#141820;border:1px solid #1e2432;border-radius:12px;padding:1.25rem;margin-bottom:1.25rem}
+        .card-title{font-size:11px;font-weight:500;color:#475569;text-transform:uppercase;letter-spacing:.06em;margin-bottom:1rem}
+
+        /* Stat cards */
+        .metric{background:#141820;border:1px solid #1e2432;border-radius:10px;padding:1rem;text-align:center}
+        .metric-label{font-size:11px;color:#475569;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
+        .metric-value{font-size:24px;font-weight:500;color:#f1f5f9}
+        .metric-sub{font-size:11px;color:#334155;margin-top:4px}
+
+        .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem}
+        .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:1.25rem;margin-bottom:1.25rem}
+
+        /* Colors */
+        .pnl-pos{color:#34d399}.pnl-neg{color:#f87171}.pnl-neu{color:#64748b}
+        .up{color:#34d399}.down{color:#f87171}
+
+        /* Regime badges */
+        .badge-MEAN_REV{background:#00ff8820;color:#00ff88;border:1px solid #00ff88}
+        .badge-TRENDING{background:#ffa50020;color:#ffa500;border:1px solid #ffa500}
+        .badge-HIGH_VOL{background:#ff444420;color:#ff4444;border:1px solid #ff4444}
+        .badge-NEUTRAL{background:#88888820;color:#aaaaaa;border:1px solid #888888}
+
+        /* Position */
+        .badge-FLAT{background:#33333320;color:#888;border:1px solid #555}
+        .badge-LONG_SPREAD{background:#00ff8820;color:#00ff88;border:1px solid #00ff88}
+        .badge-SHORT_SPREAD{background:#ff444420;color:#ff4444;border:1px solid #ff4444}
+
+        /* Table */
+        table{width:100%;font-size:12px;border-collapse:collapse;table-layout:fixed}
+        th{font-size:11px;color:#475569;font-weight:500;padding:7px 10px;text-align:left;border-bottom:1px solid #1e2432}
+        td{padding:8px 10px;border-bottom:1px solid #1a2035;color:#cbd5e1}
+        tr:last-child td{border-bottom:none}
+
+        .action-EXIT{color:#34d399}
+        .action-LONG_SPREAD{color:#4488ff}
+        .action-SHORT_SPREAD{color:#ff8844}
+        .action-REJECTED_BY_ML{color:#555}
+        .action-STOP_LOSS_PNL,.action-STOP_LOSS_Z{color:#f87171}
+        .action-TIME_LIMIT{color:#ffa500}
+
+        /* Approach */
+        .tech-tag{display:inline-block;font-size:11px;padding:3px 9px;border-radius:5px;background:#1e2432;color:#64748b;margin:2px;border:1px solid #2d3748}
+        .section-label{color:#fb8b1e;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+        .section-text{font-size:13px;color:#cbd5e1;line-height:1.65}
+        .phase-section{display:flex;flex-direction:column;gap:12px}
+        .phase-block{font-size:13px;color:#cbd5e1;line-height:1.6}
+        .abandoned-box{background:#2d0a0a;border:1px solid #7f1d1d;padding:12px;border-radius:6px;margin-top:8px}
+
+        /* Profile */
+        .profile-avatar{width:68px;height:68px;border-radius:50%;background:#1e3a5f;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:500;color:#60a5fa;flex-shrink:0}
+        .social-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:8px;border:1px solid #2d3748;font-size:13px;color:#e2e8f0;text-decoration:none;margin-right:8px;background:#141820}
+        .social-btn:hover{background:#1e2432;color:#fff}
+        .divider{border:none;border-top:1px solid #1e2432;margin:1.5rem 0}
+
+        /* Pulse dot */
+        .update-dot{width:8px;height:8px;border-radius:50%;background:#00ff88;display:inline-block;animation:pulse 2s infinite}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+        /* Disclaimer */
+        .disclaimer{font-size:11px;color:#334155;padding:.85rem 1rem;background:#0d1117;border-radius:8px;margin-top:1rem;border-left:2px solid #1e2432;line-height:1.6}
+
+        @media(max-width:768px){
+            .header{flex-direction:column;align-items:flex-start;gap:15px}
+            .grid-4{grid-template-columns:repeat(2,1fr)}
+            .grid-2{grid-template-columns:1fr}
+            table{display:block;overflow-x:auto;white-space:nowrap}
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+<!-- HEADER -->
+<div class="header">
+    <div class="header-left">
+        <h1><span style="color:#fb8b1e">Algorithmic Trading Bot</span></h1>
+        <p>Quantitative Research Portfolio &middot; Python, Machine Learning & Statistics</p>
+    </div>
+    <div style="text-align:right">
+        <span class="badge-live"><span class="update-dot"></span> Live</span>
+        <div style="font-size:11px;color:#334155;margin-top:4px">{{ last_update }}</div>
+    </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+    <button class="tab active" onclick="switchTab('dashboard',this)">Dashboard</button>
+    <button class="tab" onclick="switchTab('approach',this)">Approach</button>
+    <button class="tab" onclick="switchTab('profile',this)">About me</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- TAB DASHBOARD                                             -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div id="tab-dashboard" class="tab-content active">
+
+    <!-- Résumé global -->
+    <div class="grid-4">
+        <div class="metric">
+            <div class="metric-label">Capital Total</div>
+            <div class="metric-value">${{ "%.2f"|format(global_capital or 0) }}</div>
+            <div class="metric-sub">StatArb + Funding Carry</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">StatArb P&L</div>
+            <div class="metric-value {% if statarb.stats.total_pnl > 0 %}pnl-pos{% elif statarb.stats.total_pnl < 0 %}pnl-neg{% else %}pnl-neu{% endif %}">
+                {% if statarb.stats.total_pnl > 0 %}+{% endif %}{{ "%.2f"|format(statarb.stats.total_pnl) }}%
+            </div>
+            <div class="metric-sub">{{ statarb.stats.total_trades }} trades fermés</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Funding Collecté</div>
+            <div class="metric-value {% if funding.stats.total_funding_all_time > 0 %}pnl-pos{% else %}pnl-neu{% endif %}">
+                ${{ "%.4f"|format(funding.stats.total_funding_all_time or 0) }}
+            </div>
+            <div class="metric-sub">{{ funding.stats.total_closed_positions }} positions fermées</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Régime Actuel</div>
+            <div class="metric-value" style="font-size:1.4rem">
+                {% if regime %}
+                    {% if regime.regime == 'MEAN_REV' %}🟢 {{ regime.regime }}
+                    {% elif regime.regime == 'TRENDING' %}🟡 {{ regime.regime }}
+                    {% elif regime.regime == 'HIGH_VOL' %}🔴 {{ regime.regime }}
+                    {% else %}⚪ {{ regime.regime }}{% endif %}
+                {% else %}—{% endif %}
+            </div>
+            <div class="metric-sub">{{ regime.timestamp if regime else '' }}</div>
+        </div>
+    </div>
+
+    <!-- Sous-onglets stratégies -->
+    <div class="tabs" style="justify-content:flex-start;margin-bottom:1.25rem;border-bottom:1px solid #1e2432">
+        <button class="tab active" onclick="switchSubTab('statarb',this)" style="font-size:12px">📊 Statistical Arbitrage</button>
+        <button class="tab" onclick="switchSubTab('funding',this)" style="font-size:12px">💰 Funding Rate Carry</button>
+    </div>
+
+    <!-- ═══════════ SUB-TAB: STAT ARB ═══════════ -->
+    <div id="subtab-statarb" class="subtab-content active">
+
+        <div class="grid-4">
+            <div class="metric">
+                <div class="metric-label">Capital</div>
+                <div class="metric-value">${{ "%.2f"|format(statarb.current.equity_usdt or 0) }}</div>
+                <div class="metric-sub">
+                    <span class="badge rounded-pill badge-{{ statarb.current.position_status or 'FLAT' }} px-2" style="font-size:10px">
+                        {{ statarb.current.position_status or 'FLAT' }}
+                    </span>
+                </div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">P&L Total</div>
+                <div class="metric-value {% if statarb.stats.total_pnl > 0 %}pnl-pos{% elif statarb.stats.total_pnl < 0 %}pnl-neg{% else %}pnl-neu{% endif %}">
+                    {% if statarb.stats.total_pnl > 0 %}+{% endif %}{{ "%.2f"|format(statarb.stats.total_pnl) }}%
+                </div>
+                <div class="metric-sub">moy. {{ "%.3f"|format(statarb.stats.avg_pnl) }}% / trade</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Win Rate</div>
+                <div class="metric-value {% if statarb.stats.win_rate >= 55 %}pnl-pos{% elif statarb.stats.win_rate >= 45 %}pnl-neu{% else %}pnl-neg{% endif %}">
+                    {{ statarb.stats.win_rate }}%
+                </div>
+                <div class="metric-sub">{{ statarb.stats.total_trades }} trades fermés</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">TP / SL</div>
+                <div class="metric-value">
+                    <span class="pnl-pos">{{ statarb.stats.tp_count }}</span>
+                    <span style="color:#334155;font-size:1.2rem"> / </span>
+                    <span class="pnl-neg">{{ statarb.stats.sl_count }}</span>
+                </div>
+                <div class="metric-sub">Take Profit / Stop Loss</div>
+            </div>
+        </div>
+
+        {% if regime %}
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-title">Régime Actuel (BTC vol + ETH Hurst)</div>
+                <div style="display:flex;align-items:center;gap:16px">
+                    <span style="font-size:2rem">
+                        {% if regime.regime == 'MEAN_REV' %}🟢
+                        {% elif regime.regime == 'TRENDING' %}🟡
+                        {% elif regime.regime == 'HIGH_VOL' %}🔴
+                        {% else %}⚪{% endif %}
+                    </span>
+                    <div>
+                        <div class="fw-bold fs-5">{{ regime.regime }}</div>
+                        <div style="font-size:11px;color:#475569;margin-top:2px">{{ regime.timestamp }}</div>
+                    </div>
+                    <div style="margin-left:auto;text-align:right;font-size:12px;color:#64748b">
+                        <div>BTC Vol <span style="color:#e2e8f0">{{ "%.4f"|format(regime.btc_vol or 0) }}</span></div>
+                        <div>ETH Hurst <span style="color:#e2e8f0">{{ "%.4f"|format(regime.eth_hurst or 0) }}</span></div>
+                        <div>ETH ADX <span style="color:#e2e8f0">{{ "%.1f"|format(regime.eth_adx or 0) }}</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">Position Ouverte</div>
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                    <div>
+                        <span class="badge rounded-pill badge-{{ statarb.current.position_status or 'FLAT' }} px-3 py-2" style="font-size:13px">
+                            {{ statarb.current.position_status or 'FLAT' }}
+                        </span>
+                        <div style="font-size:11px;color:#475569;margin-top:8px">{{ statarb.current.num_trades_total or 0 }} trades exécutés au total</div>
+                    </div>
+                    <div style="text-align:right">
+                        <div style="font-size:11px;color:#475569;margin-bottom:2px">PnL Latent</div>
+                        <div style="font-size:1.8rem;font-weight:700" class="{% if (statarb.current.unrealized_pnl_pct or 0) > 0 %}pnl-pos{% elif (statarb.current.unrealized_pnl_pct or 0) < 0 %}pnl-neg{% else %}pnl-neu{% endif %}">
+                            {% if (statarb.current.unrealized_pnl_pct or 0) > 0 %}+{% endif %}{{ "%.3f"|format((statarb.current.unrealized_pnl_pct or 0) * 100) }}%
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-title" style="display:flex;justify-content:space-between">
+                <span>Courbe de Capital — StatArb</span>
+                <span style="color:#334155">{{ statarb.chart_values|length }} points</span>
+            </div>
+            <canvas id="statarbChart" height="80"></canvas>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Trades Récents — StatArb</div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th><th>Action</th><th>Z-Score</th><th>ML Prob</th>
+                            <th>Prix AAVE</th><th>Prix ETH</th><th>P&L</th><th>Durée</th><th>Raison</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in statarb.trades %}
+                        <tr>
+                            <td style="color:#475569;font-size:11px">{{ t.timestamp or '' }}</td>
+                            <td><span class="fw-bold action-{{ t.action or '' }}">{{ t.action or '—' }}</span></td>
+                            <td>{{ "%.2f"|format(t.zscore or 0) }}</td>
+                            <td>{% if t.ml_prob %}{{ "%.0f"|format((t.ml_prob or 0)*100) }}%{% else %}—{% endif %}</td>
+                            <td>${{ "%.2f"|format(t.aave_price or 0) }}</td>
+                            <td>${{ "%.0f"|format(t.eth_price or 0) }}</td>
+                            <td class="fw-bold {% if (t.pnl_pct or 0) > 0 %}pnl-pos{% elif (t.pnl_pct or 0) < 0 %}pnl-neg{% else %}pnl-neu{% endif %}">
+                                {% if t.pnl_pct is not none %}{% if t.pnl_pct > 0 %}+{% endif %}{{ "%.3f"|format(t.pnl_pct * 100) }}%{% else %}—{% endif %}
+                            </td>
+                            <td>{% if t.duration_candles %}{{ t.duration_candles }}b{% else %}—{% endif %}</td>
+                            <td style="font-size:11px">
+                                {% if t.exit_reason == 'TP' %}<span class="pnl-pos">✓ TP</span>
+                                {% elif t.exit_reason and t.exit_reason.startswith('STOP') %}<span class="pnl-neg">✗ {{ t.exit_reason }}</span>
+                                {% elif t.exit_reason == 'TIME_LIMIT' %}<span style="color:#ffa500">⏰</span>
+                                {% else %}—{% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="9" style="text-align:center;color:#334155;padding:2rem">Aucun trade enregistré</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="disclaimer">Paper trading only — no real money involved. Pair: AAVE/ETH via cointegration + Rolling OLS hedge ratio, filtered by LightGBM meta-labeling.</div>
+    </div>
+
+    <!-- ═══════════ SUB-TAB: FUNDING CARRY ═══════════ -->
+    <div id="subtab-funding" class="subtab-content">
+
+        <div class="grid-4">
+            <div class="metric">
+                <div class="metric-label">Capital</div>
+                <div class="metric-value">${{ "%.2f"|format(funding.current.equity_usdt or 0) }}</div>
+                <div class="metric-sub">
+                    <span class="badge rounded-pill" style="font-size:10px;{% if funding.current.position_status == 'LONG_SPOT_SHORT_PERP' %}background:#00ff8820;color:#00ff88;border:1px solid #00ff88{% else %}background:#33333320;color:#888;border:1px solid #555{% endif %}">
+                        {{ funding.current.position_status or 'FLAT' }}
+                    </span>
+                </div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Funding Collecté (position actuelle)</div>
+                <div class="metric-value {% if (funding.current.funding_collected_usd or 0) > 0 %}pnl-pos{% else %}pnl-neu{% endif %}">
+                    ${{ "%.4f"|format(funding.current.funding_collected_usd or 0) }}
+                </div>
+                <div class="metric-sub">{{ funding.current.symbol or '—' }}</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Funding Total (all-time)</div>
+                <div class="metric-value {% if funding.stats.total_funding_all_time > 0 %}pnl-pos{% else %}pnl-neu{% endif %}">
+                    ${{ "%.4f"|format(funding.stats.total_funding_all_time or 0) }}
+                </div>
+                <div class="metric-sub">{{ funding.stats.total_closed_positions }} positions fermées</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">PnL Latent (basis)</div>
+                <div class="metric-value {% if (funding.current.unrealized_pnl_usd or 0) > 0 %}pnl-pos{% elif (funding.current.unrealized_pnl_usd or 0) < 0 %}pnl-neg{% else %}pnl-neu{% endif %}">
+                    ${{ "%.4f"|format(funding.current.unrealized_pnl_usd or 0) }}
+                </div>
+                <div class="metric-sub">Spot vs Perp</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title" style="display:flex;justify-content:space-between">
+                <span>Courbe de Capital — Funding Carry</span>
+                <span style="color:#334155">{{ funding.chart_values|length }} points</span>
+            </div>
+            <canvas id="fundingChart" height="80"></canvas>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Trades Récents — Funding Carry</div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th><th>Action</th><th>Symbole</th><th>Prix Spot</th>
+                            <th>Prix Perp</th><th>Basis</th><th>Funding APR</th><th>Funding Total</th><th>Raison</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in funding.trades %}
+                        <tr>
+                            <td style="color:#475569;font-size:11px">{{ t.timestamp or '' }}</td>
+                            <td>
+                                <span class="fw-bold" style="{% if t.action == 'ENTRY' %}color:#4488ff{% elif t.action == 'EXIT' %}color:#34d399{% else %}color:#888{% endif %}">
+                                    {{ t.action or '—' }}
+                                </span>
+                            </td>
+                            <td>{{ t.symbol or '—' }}</td>
+                            <td>${{ "%.2f"|format(t.spot_price or 0) }}</td>
+                            <td>${{ "%.2f"|format(t.perp_price or 0) }}</td>
+                            <td>{{ "%.3f"|format(t.basis_pct or 0) }}%</td>
+                            <td class="{% if (t.funding_apr or 0) > 0 %}pnl-pos{% else %}pnl-neg{% endif %}">
+                                {{ "%.2f"|format(t.funding_apr or 0) }}%
+                            </td>
+                            <td class="fw-bold {% if (t.total_funding_collected_usd or 0) > 0 %}pnl-pos{% else %}pnl-neu{% endif %}">
+                                ${{ "%.4f"|format(t.total_funding_collected_usd or 0) }}
+                            </td>
+                            <td style="font-size:11px">
+                                {% if t.exit_reason %}
+                                    {% if 'TIME' in t.exit_reason %}<span style="color:#ffa500">⏰ {{ t.exit_reason }}</span>
+                                    {% elif 'NEGATIVE' in t.exit_reason %}<span class="pnl-neg">✗ {{ t.exit_reason }}</span>
+                                    {% else %}{{ t.exit_reason }}{% endif %}
+                                {% else %}—{% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="9" style="text-align:center;color:#334155;padding:2rem">Aucun trade enregistré</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="disclaimer">Paper trading only — no real money involved. Market-neutral carry: Long Spot + Short Perpetual, harvesting funding rate payments every 8h. Entry/exit filtered by 30d APR and rolling funding consistency, min. holding period enforced to cover round-trip fees.</div>
+    </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- TAB APPROACH                                              -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div id="tab-approach" class="tab-content">
+
+    <div class="card" style="border-left:3px solid #f87171">
+        <div class="card-title" style="color:#f1f5f9">Phase 1 — BTC/USDT 4H Swing Trading <span style="color:#f87171">(Abandoned)</span></div>
+        <div class="phase-section">
+            <div class="phase-block"><div class="section-label">Research & Strategy</div>
+                <strong>Asset:</strong> BTC/USDT. <strong>Market Characteristics:</strong> 24/7/365 trading environment, heavily retail-driven, distinct cyclical regimes. <strong>Horizon:</strong> Swing Trading. <strong>Drivers:</strong> Funding Rates, on-chain flows, macroeconomic cyclicality. <strong>Capital:</strong> 100€ initial budget (Forward-testing via Binance Testnet). <strong>Costs:</strong> Binance Futures (Maker: 0.02% | Taker: 0.05%).
+            </div>
+            <div class="phase-block"><div class="section-label">Data</div>
+                <strong>Market:</strong> OHLCV. <strong>Alternative:</strong> Funding Rate, Fear & Greed Index. <strong>Macro:</strong> DXY, Equities (via yfinance). <strong>Excluded:</strong> Open Interest (historical data unavailable at required granularity).
+            </div>
+            <div class="phase-block"><div class="section-label">Training</div>
+                <em>Phase 1 (Directional):</em> XGBoost (outperformed LightGBM), 4H horizon predicting T+24H (rolling window), Optuna TPE tuning.<br>
+                <em>Phase 2 (Meta-Labeling):</em> Random Forest Classifier. Triple Barrier Setup: PT = 1.5x Vol, SL = 1.0x Vol, TL = 24h.<br>
+                Break-even required &gt; 40.0% precision. Primary model alone yielded 33.25% (Unprofitable). Meta-Model reached 55.14% at 54.0% confidence threshold.
+            </div>
+            <div class="abandoned-box"><div class="section-label" style="color:#f87171">Backtest & The Pivot</div>
+                The 4H market exhibited too much of a "Random Walk" with severe intrabar noise. Impossible at this scale to construct a robust, winning strategy without massive capital to absorb drawdowns.<br>
+                <strong>Decision: Pivot to 15-minute BTC Up or Down binary contracts on Polymarket.</strong>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="border-left:3px solid #f87171">
+        <div class="card-title" style="color:#f1f5f9">Phase 2 — Polymarket 15-Minute Binary Bot <span style="color:#f87171">(Abandoned)</span></div>
+        <div class="phase-section">
+            <div class="phase-block"><div class="section-label">Research & Strategy</div>
+                <strong>Asset:</strong> Polymarket BTC Up/Down Contracts. <strong>Horizon:</strong> 15 minutes. <strong>Advantage:</strong> Eliminates stop-loss hunting, slippage, and complex position sizing. The binary label resolves precisely at close[t+15] &gt; close[t], providing a mathematically pristine environment for the algorithm.
+            </div>
+            <div class="phase-block"><div class="section-label">Data</div>
+                <strong>Memory:</strong> Binance OHLCV 1m API (Incremental updates). <strong>Execution:</strong> Polymarket Gamma API (Dynamic token IDs) &amp; CLOB API (Order book matching).
+            </div>
+            <div class="phase-block"><div class="section-label">Features</div>
+                Engineered specific short-term inertia indicators: Rolling Volatility (60m std), Momentum (5m &amp; 15m returns), Volume Surge (vs 4H mean), and RSI (14-period). Absolute prices were strictly excluded to prevent look-ahead bias.
+            </div>
+            <div class="phase-block"><div class="section-label">Deployment</div>
+                Autonomous Python architecture deployed on Render. Scheduled via APScheduler at hh:02, hh:17, hh:32, hh:47 UTC. Flask dashboard acting as a live terminal with real-time logging and dynamic risk shielding (abort if bid/ask spread &gt; $0.05).
+            </div>
+            <div class="abandoned-box"><div class="section-label" style="color:#f87171">Live Diagnosis & The Pivot</div>
+                Market microstructure and liquidity constraints on Polymarket invalidate high-frequency directional trading. Target market showed a spread of $0.98 — risking $0.99 to gain $0.01 requires a &gt;99.1% win rate, making the strategy mathematically unviable.<br>
+                <strong>Decision: Pivot to Statistical Arbitrage (Pairs Trading) on Binance Futures.</strong>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="border-left:3px solid #3b82f6">
+        <div class="card-title" style="color:#f1f5f9">Phase 3 — Statistical Arbitrage + Regime Detector <span style="color:#60a5fa">(Live Demo)</span></div>
+        <div class="phase-section">
+            <div class="phase-block"><div class="section-label">Concept & Strategy</div>
+                <strong>Market Neutral</strong> approach (Pairs Trading). By identifying two strongly co-integrated assets (AAVE/ETH), the algorithm trades the "spread" (mathematical divergence between them) rather than attempting to predict absolute price direction. Zero directional market exposure.
+            </div>
+            <div class="phase-block"><div class="section-label">Statistical Foundation</div>
+                Pair selection via <strong>Engle-Granger cointegration test</strong> (p-value &lt; 0.05) + <strong>Hurst Exponent</strong> (&lt; 0.5 = mean-reversion) + <strong>ADF out-of-sample</strong> stationarity test. Hedge ratio estimated dynamically via <strong>Rolling OLS</strong> (institutional standard) to avoid stale ratio drift.
+            </div>
+            <div class="phase-block"><div class="section-label">ML Layer (Meta-Labeling)</div>
+                A <strong>LightGBM classifier</strong> acts as a "gatekeeper" — only allowing entries when confidence &gt; 60%. Features: Z-score momentum (1h/4h), volatility regime, directional returns. Trained via Lopez de Prado's <strong>Triple Barrier Method</strong> (TP=Z→0 / SL=Z≥4 / Time=24h). Baseline win-rate: 58.7% → ML-filtered: 88.67%.
+            </div>
+            <div class="phase-block"><div class="section-label">Regime Detector</div>
+                A two-level macro filter runs every hour: <strong>BTC realized volatility</strong> detects systemic stress (HIGH_VOL → funding carry activated), while <strong>ETH Hurst + ADX</strong> detects the microstructure regime (MEAN_REV → stat arb / TRENDING → momentum). Validated via walk-forward across 3 distinct market periods with Hurst separation of 0.21+ between regimes.
+            </div>
+            <div class="phase-block"><div class="section-label">Risk Management</div>
+                Three independent stop-loss layers: <strong>Z-Score SL</strong> (Z ≥ ±6.0, black swan), <strong>PnL SL</strong> (-5% of exposed capital, beta mismatch protection), <strong>Time Barrier</strong> (48h maximum holding, mean-reversion timeout). Position recovery on restart via live Binance API query.
+            </div>
+            <div class="phase-block"><div class="section-label">Architecture</div>
+                Fully autonomous Python pipeline: <code>fetch_data → build_features → train_model → backtest → live_bot</code>. Weekly automated pair rescanning selects the best cointegrated pair from 11 candidates. Regime + pair selection written to JSON, consumed by the trading bot at each 15m cycle.
+            </div>
+            <div style="background:#052e16;border:1px solid #065f46;padding:12px;border-radius:6px;margin-top:8px;font-size:13px;color:#cbd5e1;line-height:1.6">
+                <div class="section-label" style="color:#34d399">Current Status</div>
+                Running live on Binance Demo (Futures Paper Trading). Regime: MEAN_REV (ETH Hurst 0.27). Stat arb active on AAVE/ETH. Data persisted to Supabase, dashboard auto-refreshes every 30s.
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Sources & Acknowledgements</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+            <span class="tech-tag" style="border-color:#fb8b1e;color:#fb8b1e">Advances in Financial Machine Learning (Marcos Lopez de Prado)</span>
+            <span class="tech-tag">LightGBM</span>
+            <span class="tech-tag">ccxt</span>
+            <span class="tech-tag">statsmodels</span>
+            <span class="tech-tag">Supabase</span>
+            <span class="tech-tag">Render</span>
+            <span class="tech-tag">Gemini Pro</span>
+            <span class="tech-tag">Claude</span>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- TAB ABOUT ME                                              -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div id="tab-profile" class="tab-content">
+    <div class="card">
+        <div style="display:flex;align-items:center;gap:18px;margin-bottom:1.5rem">
+            <div class="profile-avatar">PAB</div>
+            <div>
+                <p style="font-size:22px;font-weight:600;color:#f1f5f9">Paul Arnaud-Battandier</p>
+                <p style="font-size:14px;color:#cbd5e1;margin-top:4px">Major in Finance &amp; Quantitative Engineering &middot; ECE Paris</p>
+                <p style="font-size:15px;color:#fb8b1e;margin-top:6px;font-weight:500">Seeking an end-of-studies internship &middot; Jan/Feb 2027 &middot; Trading or Quantitative Research</p>
+            </div>
+        </div>
+
+        <div style="margin-bottom:1.5rem;display:flex;gap:12px;flex-wrap:wrap">
+            <a class="social-btn" href="https://www.linkedin.com/in/paul-arnaud-battandier/" target="_blank">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
+                LinkedIn
+            </a>
+            <a class="social-btn" href="https://github.com/Paul-Arnaud-Battandier" target="_blank">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+                GitHub
+            </a>
+            <a class="social-btn" href="/static/CV_Paul_Arnaud-Battandier.pdf" target="_blank" style="border-color:#fb8b1e;color:#fb8b1e;background:rgba(251,139,30,.05)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Download CV
+            </a>
+        </div>
+
+        <div class="divider"></div>
+
+        <div style="display:flex;flex-direction:column;gap:2rem;margin-top:1.5rem">
+            <div>
+                <div class="card-title" style="color:#fb8b1e;font-size:12px">About my personality</div>
+                <p style="font-size:14px;color:#cbd5e1;line-height:1.7">I am highly analytical, pragmatic, and driven by complex problem-solving. I thrive at the intersection of mathematics, computer science, and financial markets. I believe in building robust, data-driven systems without "black box" illusions, always focusing on statistical edge, strict risk management, and clean architecture.</p>
+            </div>
+            <div>
+                <div class="card-title" style="color:#fb8b1e;font-size:12px">My core skills</div>
+                <p style="font-size:14px;color:#cbd5e1;line-height:1.7">My technical stack is centered around Quantitative Finance and Machine Learning. I specialize in Python (Pandas, NumPy, Scikit-Learn) and predictive modeling (LightGBM, Random Forest, XGBoost). I am heavily influenced by Marcos Lopez de Prado's framework for <em>Advances in Financial Machine Learning</em> (Purged CV, fractional differentiation, meta-labeling). Beyond research, I build end-to-end pipelines: from API integrations to live cloud deployments.</p>
+            </div>
+            <div>
+                <div class="card-title" style="color:#fb8b1e;font-size:12px">My ambitions</div>
+                <p style="font-size:14px;color:#cbd5e1;line-height:1.7">My immediate goal is to secure an end-of-studies internship in a fast-paced proprietary trading firm, hedge fund, or quantitative research desk. I want to surround myself with industry experts, contribute to alpha generation or execution optimization, and ultimately evolve into a top-tier Quantitative Researcher or Algorithmic Trader.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div><!-- /container -->
+
+<script>
+function switchTab(id, btn) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tabs > .tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + id).classList.add('active');
+    btn.classList.add('active');
+}
+
+function switchSubTab(id, btn) {
+    document.querySelectorAll('.subtab-content').forEach(t => t.classList.remove('active'));
+    btn.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('subtab-' + id).classList.add('active');
+    btn.classList.add('active');
+}
+
+function makeEquityChart(canvasId, labels, values, chartLabel) {
+    const el = document.getElementById(canvasId);
+    if (!el || values.length === 0) return;
+    const start = values[0], end = values[values.length - 1];
+    const color = end >= start ? '#34d399' : '#f87171';
+    new Chart(el, {
+        type: 'line',
+        data: { labels, datasets: [{ label: chartLabel, data: values, borderColor: color,
+            backgroundColor: color + '15', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.3 }] },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `$${c.parsed.y.toFixed(2)}` } } },
+            scales: {
+                x: { ticks: { color: '#475569', maxTicksLimit: 8, maxRotation: 0 }, grid: { color: '#1a1a35' } },
+                y: { ticks: { color: '#64748b', callback: v => `$${v.toFixed(2)}` }, grid: { color: '#1a1a35' } }
+            },
+            interaction: { intersect: false, mode: 'index' }
+        }
+    });
+}
+
+// StatArb chart
+makeEquityChart('statarbChart',
+    {{ statarb.chart_labels | tojson }},
+    {{ statarb.chart_values | tojson }},
+    'Capital StatArb (USDT)'
+);
+
+// Funding chart
+makeEquityChart('fundingChart',
+    {{ funding.chart_labels | tojson }},
+    {{ funding.chart_values | tojson }},
+    'Capital Funding Carry (USDT)'
+);
+</script>
+</body>
 </html>

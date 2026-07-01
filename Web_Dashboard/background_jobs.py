@@ -19,8 +19,9 @@ from datetime import datetime
 
 # ── Chemins vers les modules des autres dossiers ───────────────
 ROOT_DIR = Path(__file__).parent.parent  # ML_Crypto_Bot/
-sys.path.insert(0, str(ROOT_DIR / "Regime_Detector" / "scripts"))
-sys.path.insert(0, str(ROOT_DIR / "StatArb_ETH_15m"  / "scripts"))
+sys.path.insert(0, str(ROOT_DIR / "Regime_Detector"    / "scripts"))
+sys.path.insert(0, str(ROOT_DIR / "StatArb_ETH_15m"    / "scripts"))
+sys.path.insert(0, str(ROOT_DIR / "FundingCarry_Multi" / "scripts"))
 
 
 def regime_loop():
@@ -89,8 +90,51 @@ def trading_loop():
             backoff = min(backoff * 2, 600)  # cap à 10 minutes
 
 
+def funding_rescan_loop():
+    """Relance le scan de sélection de paire toutes les 24h (thread séparé,
+    tourne en parallèle du bot de trading funding)."""
+    from select_funding_pair import get_best_funding  # type: ignore
+
+    while True:
+        try:
+            get_best_funding(verbose=True)
+        except Exception as e:
+            print(f"[BG] ⚠️ Erreur rescan funding : {e}")
+        time.sleep(24 * 3600)  # 24h
+
+
+def funding_loop():
+    """Lance select_funding_pair.py (scan initial + rescan quotidien en
+    thread interne) puis live_funding_bot.py en continu."""
+    from select_funding_pair import get_best_funding  # type: ignore
+    from live_funding_bot import main as funding_main   # type: ignore
+
+    time.sleep(random.uniform(5, 12))
+    print("[BG] 💰 Funding loop démarré")
+
+    try:
+        get_best_funding(verbose=True)
+    except Exception as e:
+        print(f"[BG] ⚠️ Erreur scan funding initial : {e}")
+
+    # Thread interne pour le rescan quotidien (indépendant du bot bloquant)
+    threading.Thread(target=funding_rescan_loop, daemon=True, name="funding_rescan_thread").start()
+
+    backoff = 30
+    while True:
+        try:
+            funding_main()  # Contient sa propre boucle infinie (check 8h)
+            backoff = 30
+        except Exception as e:
+            print(f"[BG] ❌ Funding bot crashé : {e}")
+            print(f"[BG] ⏳ Relance dans {backoff}s")
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 600)
+
+
 def start_background_jobs():
-    """Démarre les deux boucles en threads daemon (non-bloquant)."""
+    """Démarre les trois boucles en threads daemon (non-bloquant)."""
     threading.Thread(target=regime_loop,  daemon=True, name="regime_thread").start()
     threading.Thread(target=trading_loop, daemon=True, name="trading_thread").start()
-    print("[BG] ✅ Threads de fond lancés (régime + trading)")
+    threading.Thread(target=funding_loop, daemon=True, name="funding_thread").start()
+    print("[BG] ✅ Threads de fond lancés (régime + statarb + funding)")

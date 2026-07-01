@@ -1,7 +1,7 @@
 """
-app.py — StatArb Dashboard
+app.py — Trading Bot Dashboard
 Flask app déployé sur Render.
-Lit les données depuis Supabase et affiche le dashboard.
+Lit les données depuis Supabase (StatArb + Funding Carry) et affiche le dashboard.
 """
 
 import os
@@ -43,26 +43,16 @@ def sb_get(table, params=''):
         return []
 
 
-@app.route('/')
-def index():
-    # ── Equity curve (500 derniers points) ────────────────────
+def get_statarb_data():
+    """Récupère toutes les données StatArb (equity, trades, stats)"""
     equity_raw = sb_get('live_equity', 'order=id.asc&limit=500')
+    trades     = sb_get('live_trades', 'order=id.desc&limit=20')
 
-    # ── Trades récents ─────────────────────────────────────────
-    trades = sb_get('live_trades', 'order=id.desc&limit=20')
-
-    # ── Régime actuel ──────────────────────────────────────────
-    regime_data = sb_get('regime_history', 'order=id.desc&limit=1')
-    regime = regime_data[0] if regime_data else None
-
-    # ── Stats sur les trades fermés ────────────────────────────
     all_exits = sb_get('live_trades', 'action=eq.EXIT&order=id.desc&limit=500')
     pnl_list  = [t['pnl_pct'] for t in all_exits if t.get('pnl_pct') is not None]
     wins      = [p for p in pnl_list if p > 0]
-
-    # Stop losses
-    sl_trades  = [t for t in all_exits if t.get('exit_reason', '').startswith('STOP')]
-    tp_trades  = [t for t in all_exits if t.get('exit_reason') == 'TP']
+    sl_trades = [t for t in all_exits if (t.get('exit_reason') or '').startswith('STOP')]
+    tp_trades = [t for t in all_exits if t.get('exit_reason') == 'TP']
 
     stats = {
         'total_trades': len(pnl_list),
@@ -73,28 +63,73 @@ def index():
         'sl_count'    : len(sl_trades),
     }
 
-    # ── État actuel ─────────────────────────────────────────────
     current = equity_raw[-1] if equity_raw else {
-        'equity_usdt': 0,
-        'position_status': 'UNKNOWN',
-        'unrealized_pnl_pct': 0,
+        'equity_usdt': 0, 'position_status': 'UNKNOWN', 'unrealized_pnl_pct': 0,
     }
 
-    # ── Données graphique ───────────────────────────────────────
-    chart_labels = []
-    chart_values = []
+    chart_labels, chart_values = [], []
     for e in equity_raw:
         ts = e.get('timestamp', '')
-        chart_labels.append(ts[5:16] if len(ts) > 15 else ts)  # MM-DD HH:MM
+        chart_labels.append(ts[5:16] if len(ts) > 15 else ts)
         chart_values.append(round(e.get('equity_usdt', 0), 2))
+
+    return {
+        'trades': trades, 'stats': stats, 'current': current,
+        'chart_labels': chart_labels, 'chart_values': chart_values,
+    }
+
+
+def get_funding_data():
+    """Récupère toutes les données Funding Carry (equity, trades, stats)"""
+    equity_raw = sb_get('funding_equity', 'order=id.asc&limit=500')
+    trades     = sb_get('funding_trades', 'order=id.desc&limit=20')
+
+    all_exits = sb_get('funding_trades', 'action=eq.EXIT&order=id.desc&limit=500')
+    total_funding_list = [t['total_funding_collected_usd'] for t in all_exits
+                           if t.get('total_funding_collected_usd') is not None]
+
+    current = equity_raw[-1] if equity_raw else {
+        'equity_usdt': 0, 'position_status': 'FLAT', 'symbol': '',
+        'funding_collected_usd': 0, 'unrealized_pnl_usd': 0,
+    }
+
+    stats = {
+        'total_closed_positions'   : len(all_exits),
+        'total_funding_all_time'   : round(sum(total_funding_list), 4) if total_funding_list else 0,
+        'current_funding_collected': round(current.get('funding_collected_usd', 0) or 0, 4),
+        'avg_funding_per_position' : round(sum(total_funding_list) / len(total_funding_list), 4) if total_funding_list else 0,
+    }
+
+    chart_labels, chart_values = [], []
+    for e in equity_raw:
+        ts = e.get('timestamp', '')
+        chart_labels.append(ts[5:16] if len(ts) > 15 else ts)
+        chart_values.append(round(e.get('equity_usdt', 0), 2))
+
+    return {
+        'trades': trades, 'stats': stats, 'current': current,
+        'chart_labels': chart_labels, 'chart_values': chart_values,
+    }
+
+
+@app.route('/')
+def index():
+    statarb  = get_statarb_data()
+    funding  = get_funding_data()
+
+    regime_data = sb_get('regime_history', 'order=id.desc&limit=1')
+    regime = regime_data[0] if regime_data else None
+
+    # ── Résumé global (somme des deux stratégies) ─────────────
+    global_capital = (statarb['current'].get('equity_usdt') or 0) + \
+                      (funding['current'].get('equity_usdt') or 0)
+    global_pnl_pct = statarb['stats']['total_pnl']  # StatArb en %, funding en $ séparé
 
     return render_template('index.html',
         regime=regime,
-        trades=trades,
-        stats=stats,
-        current=current,
-        chart_labels=chart_labels,
-        chart_values=chart_values,
+        statarb=statarb,
+        funding=funding,
+        global_capital=global_capital,
         last_update=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     )
 
@@ -102,13 +137,15 @@ def index():
 @app.route('/api/status')
 def api_status():
     """Endpoint JSON pour checks externes"""
-    regime_data = sb_get('regime_history', 'order=id.desc&limit=1')
-    equity_data = sb_get('live_equity', 'order=id.desc&limit=1')
+    regime_data  = sb_get('regime_history', 'order=id.desc&limit=1')
+    equity_data  = sb_get('live_equity', 'order=id.desc&limit=1')
+    funding_data = sb_get('funding_equity', 'order=id.desc&limit=1')
     return jsonify({
-        'status'   : 'online',
-        'regime'   : regime_data[0].get('regime') if regime_data else None,
-        'equity'   : equity_data[0].get('equity_usdt') if equity_data else None,
-        'timestamp': datetime.now().isoformat(),
+        'status'        : 'online',
+        'regime'        : regime_data[0].get('regime') if regime_data else None,
+        'statarb_equity': equity_data[0].get('equity_usdt') if equity_data else None,
+        'funding_equity': funding_data[0].get('equity_usdt') if funding_data else None,
+        'timestamp'     : datetime.now().isoformat(),
     })
 
 
