@@ -1,578 +1,800 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Algorithmic Trading Bot</title>
-    <meta http-equiv="refresh" content="30">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <style>
-        *{box-sizing:border-box;margin:0;padding:0}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}
-        .container{max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
-        .header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:2rem;padding-bottom:1.5rem;border-bottom:1px solid #1e2432}
-        .header-left h1{font-size:20px;font-weight:500;color:#f1f5f9}
-        .header-left p{font-size:13px;color:#64748b;margin-top:4px}
-        .badge-live{display:inline-flex;align-items:center;gap:5px;background:#1e3a5f;color:#60a5fa;font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid #2563eb}
-        .tabs{display:flex;gap:0;justify-content:center;border-bottom:1px solid #1e2432;margin-bottom:2rem}
-        .tab{padding:10px 20px;font-size:13px;font-weight:500;color:#64748b;cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-1px}
-        .tab:hover{color:#94a3b8}
-        .tab.active{color:#f1f5f9;border-bottom:2px solid #fb8b1e}
-        .tab-content{display:none}.tab-content.active{display:block}
-        .subtab-content{display:none}.subtab-content.active{display:block}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paul Arnaud-Battandier — Quant Research Terminal</title>
+<meta http-equiv="refresh" content="30">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ═══════════════════ TOKENS ═══════════════════ */
+:root{
+  --bg:#0a0d12; --panel:#12161d; --panel-2:#0e1218; --line:#232a35; --line-soft:#1a2028;
+  --ink:#e7eaee; --dim:#8a94a6; --dim-2:#5b6472;
+  --amber:#ffb020; --amber-dim:#ffb02022;
+  --mr:#2dd4a7; --mr-dim:#2dd4a71a;
+  --tr:#f2994a; --tr-dim:#f2994a1a;
+  --hv:#ef5354; --hv-dim:#ef53541a;
+  --nt:#6b7685; --nt-dim:#6b76851a;
+  --carry:#5b9dff; --carry-dim:#5b9dff1a;
+  --font-display:'Space Grotesk',sans-serif;
+  --font-body:'IBM Plex Sans',sans-serif;
+  --font-mono:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+::selection{background:var(--amber);color:#0a0d12}
 
-        /* Cards */
-        .card{background:#141820;border:1px solid #1e2432;border-radius:12px;padding:1.25rem;margin-bottom:1.25rem}
-        .card-title{font-size:11px;font-weight:500;color:#475569;text-transform:uppercase;letter-spacing:.06em;margin-bottom:1rem}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
 
-        /* Stat cards */
-        .metric{background:#141820;border:1px solid #1e2432;border-radius:10px;padding:1rem;text-align:center}
-        .metric-label{font-size:11px;color:#475569;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
-        .metric-value{font-size:24px;font-weight:500;color:#f1f5f9}
-        .metric-sub{font-size:11px;color:#334155;margin-top:4px}
+/* ═══════════════════ STATUS BAR (signature) ═══════════════════ */
+.statusbar{position:sticky;top:0;z-index:50;background:rgba(10,13,18,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.statusbar-inner{max-width:1180px;margin:0 auto;padding:10px 24px;display:flex;align-items:center;gap:18px}
+.livedot{width:7px;height:7px;border-radius:50%;background:var(--mr);flex-shrink:0;animation:pulse 2.2s infinite}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 var(--mr-dim)}50%{opacity:.5}}
+.livelabel{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;white-space:nowrap}
+.regime-chip{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;padding:3px 10px;border-radius:3px;white-space:nowrap;font-weight:500}
+.spark-wrap{flex:1;min-width:0;height:28px;position:relative;display:flex;align-items:center}
+.spark-label{font-family:var(--font-mono);font-size:9.5px;color:var(--dim-2);letter-spacing:.1em;margin-right:10px;white-space:nowrap;display:none}
+@media(min-width:820px){.spark-label{display:block}}
+.statusbar-time{font-family:var(--font-mono);font-size:10.5px;color:var(--dim-2);white-space:nowrap;flex-shrink:0}
 
-        .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem}
-        .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:1.25rem;margin-bottom:1.25rem}
+/* ═══════════════════ NAV ═══════════════════ */
+.topnav{border-bottom:1px solid var(--line)}
+.topnav-inner{max-width:1180px;margin:0 auto;padding:20px 24px 0 24px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px}
+.brand{font-family:var(--font-display);font-weight:700;font-size:19px;letter-spacing:-.01em}
+.brand span{color:var(--amber)}
+.brand-sub{font-family:var(--font-mono);font-size:11px;color:var(--dim);margin-top:3px;letter-spacing:.02em}
+.navtabs{display:flex;gap:2px;margin-top:14px}
+.navtab{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:11px 18px;color:var(--dim);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;transition:color .15s}
+.navtab:hover{color:var(--ink)}
+.navtab.active{color:var(--amber);border-bottom-color:var(--amber)}
+.page{display:none;padding:40px 0 80px 0}
+.page.active{display:block}
 
-        /* Colors */
-        .pnl-pos{color:#34d399}.pnl-neg{color:#f87171}.pnl-neu{color:#64748b}
-        .up{color:#34d399}.down{color:#f87171}
+/* ═══════════════════ TYPE SCALE ═══════════════════ */
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4vw,42px);letter-spacing:-.02em;line-height:1.1}
+h2{font-family:var(--font-display);font-weight:600;font-size:22px;letter-spacing:-.01em;margin-bottom:4px}
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.eyebrow::before{content:'';width:14px;height:1px;background:var(--amber)}
+.lede{color:var(--dim);font-size:15px;max-width:680px;margin-top:10px}
+.mono{font-family:var(--font-mono)}
 
-        /* Regime badges */
-        .badge-MEAN_REV{background:#00ff8820;color:#00ff88;border:1px solid #00ff88}
-        .badge-TRENDING{background:#ffa50020;color:#ffa500;border:1px solid #ffa500}
-        .badge-HIGH_VOL{background:#ff444420;color:#ff4444;border:1px solid #ff4444}
-        .badge-NEUTRAL{background:#88888820;color:#aaaaaa;border:1px solid #888888}
+/* ═══════════════════ CARDS / GRID ═══════════════════ */
+.grid{display:grid;gap:14px}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:760px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}}
 
-        /* Position */
-        .badge-FLAT{background:#33333320;color:#888;border:1px solid #555}
-        .badge-LONG_SPREAD{background:#00ff8820;color:#00ff88;border:1px solid #00ff88}
-        .badge-SHORT_SPREAD{background:#ff444420;color:#ff4444;border:1px solid #ff4444}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:20px}
+.card-flush{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:0;overflow:hidden}
 
-        /* Table */
-        table{width:100%;font-size:12px;border-collapse:collapse;table-layout:fixed}
-        th{font-size:11px;color:#475569;font-weight:500;padding:7px 10px;text-align:left;border-bottom:1px solid #1e2432}
-        td{padding:8px 10px;border-bottom:1px solid #1a2035;color:#cbd5e1}
-        tr:last-child td{border-bottom:none}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+.stat-label{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim-2);margin-bottom:8px}
+.stat-value{font-family:var(--font-mono);font-size:26px;font-weight:500;line-height:1}
+.stat-sub{font-family:var(--font-mono);font-size:11px;color:var(--dim);margin-top:8px}
 
-        .action-EXIT{color:#34d399}
-        .action-LONG_SPREAD{color:#4488ff}
-        .action-SHORT_SPREAD{color:#ff8844}
-        .action-REJECTED_BY_ML{color:#555}
-        .action-STOP_LOSS_PNL,.action-STOP_LOSS_Z{color:#f87171}
-        .action-TIME_LIMIT{color:#ffa500}
+.up{color:var(--mr)}.down{color:var(--hv)}.neu{color:var(--dim)}
 
-        /* Approach */
-        .tech-tag{display:inline-block;font-size:11px;padding:3px 9px;border-radius:5px;background:#1e2432;color:#64748b;margin:2px;border:1px solid #2d3748}
-        .section-label{color:#fb8b1e;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
-        .section-text{font-size:13px;color:#cbd5e1;line-height:1.65}
-        .phase-section{display:flex;flex-direction:column;gap:12px}
-        .phase-block{font-size:13px;color:#cbd5e1;line-height:1.6}
-        .abandoned-box{background:#2d0a0a;border:1px solid #7f1d1d;padding:12px;border-radius:6px;margin-top:8px}
+/* Regime colors as utility classes */
+.c-MEAN_REV{color:var(--mr)}.c-TRENDING{color:var(--tr)}.c-HIGH_VOL{color:var(--hv)}.c-NEUTRAL{color:var(--nt)}
+.bg-MEAN_REV{background:var(--mr-dim);border-color:var(--mr)!important}
+.bg-TRENDING{background:var(--tr-dim);border-color:var(--tr)!important}
+.bg-HIGH_VOL{background:var(--hv-dim);border-color:var(--hv)!important}
+.bg-NEUTRAL{background:var(--nt-dim);border-color:var(--nt)!important}
 
-        /* Profile */
-        .profile-avatar{width:68px;height:68px;border-radius:50%;background:#1e3a5f;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:500;color:#60a5fa;flex-shrink:0}
-        .social-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:8px;border:1px solid #2d3748;font-size:13px;color:#e2e8f0;text-decoration:none;margin-right:8px;background:#141820}
-        .social-btn:hover{background:#1e2432;color:#fff}
-        .divider{border:none;border-top:1px solid #1e2432;margin:1.5rem 0}
+.badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;padding:4px 10px;border-radius:3px;border:1px solid;letter-spacing:.03em}
 
-        /* Pulse dot */
-        .update-dot{width:8px;height:8px;border-radius:50%;background:#00ff88;display:inline-block;animation:pulse 2s infinite}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+/* ═══════════════════ SECTION HEADER (strategy identity) ═══════════════════ */
+.strat-header{display:flex;align-items:center;gap:14px;margin:56px 0 20px 0;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.strat-header:first-of-type{margin-top:0}
+.strat-icon{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;border:1px solid}
+.strat-title{font-family:var(--font-display);font-weight:600;font-size:19px}
+.strat-desc{font-family:var(--font-mono);font-size:11.5px;color:var(--dim);margin-top:2px}
 
-        /* Disclaimer */
-        .disclaimer{font-size:11px;color:#334155;padding:.85rem 1rem;background:#0d1117;border-radius:8px;margin-top:1rem;border-left:2px solid #1e2432;line-height:1.6}
+/* ═══════════════════ TABLE ═══════════════════ */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim-2);text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{font-family:var(--font-mono);padding:10px 14px;border-bottom:1px solid var(--line-soft);color:var(--dim);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--panel-2)}
+.empty-row td{text-align:center;color:var(--dim-2);padding:36px;font-family:var(--font-body);font-style:normal}
 
-        @media(max-width:768px){
-            .header{flex-direction:column;align-items:flex-start;gap:15px}
-            .grid-4{grid-template-columns:repeat(2,1fr)}
-            .grid-2{grid-template-columns:1fr}
-            table{display:block;overflow-x:auto;white-space:nowrap}
-        }
-    </style>
+.disclaimer{font-family:var(--font-mono);font-size:10.5px;color:var(--dim-2);padding:14px 16px;background:var(--panel-2);border-radius:6px;margin-top:16px;line-height:1.7;border-left:2px solid var(--line)}
+
+/* ═══════════════════ ABOUT ═══════════════════ */
+.hero-about{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;margin-bottom:40px}
+.avatar{width:76px;height:76px;border-radius:10px;background:linear-gradient(135deg,var(--amber-dim),var(--panel));border:1px solid var(--amber);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:22px;color:var(--amber);flex-shrink:0}
+.about-links{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.link-btn{font-family:var(--font-mono);font-size:12px;display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:6px;border:1px solid var(--line);text-decoration:none;color:var(--ink);transition:border-color .15s,color .15s}
+.link-btn:hover{border-color:var(--amber);color:var(--amber)}
+.link-btn.primary{border-color:var(--amber);color:var(--amber);background:var(--amber-dim)}
+.about-section{margin-bottom:30px}
+.about-section h3{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber);margin-bottom:10px}
+.about-section p{color:var(--dim);font-size:14.5px;max-width:680px;line-height:1.75}
+.skill-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.skill-tag{font-family:var(--font-mono);font-size:11px;padding:5px 11px;border:1px solid var(--line);border-radius:4px;color:var(--dim)}
+
+/* ═══════════════════ RESEARCH — reverse chronological log ═══════════════════ */
+.rlog{position:relative;padding-left:28px;border-left:1px solid var(--line)}
+.rlog-entry{position:relative;margin-bottom:64px}
+.rlog-entry:last-child{margin-bottom:0}
+.rlog-dot{position:absolute;left:-33px;top:6px;width:9px;height:9px;border-radius:50%;border:2px solid var(--bg)}
+.rlog-status{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:3px 9px;border-radius:3px;display:inline-block;margin-bottom:10px;border:1px solid}
+.rlog-title{font-family:var(--font-display);font-weight:600;font-size:21px;margin-bottom:6px}
+.rlog-meta{font-family:var(--font-mono);font-size:11px;color:var(--dim-2);margin-bottom:20px}
+.rblock{margin-bottom:16px}
+.rblock-label{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim-2);margin-bottom:6px}
+.rblock p, .rblock li{color:var(--dim);font-size:13.5px;line-height:1.7}
+.rblock ul{padding-left:18px}
+.rblock li{margin-bottom:4px}
+.rblock strong{color:var(--ink);font-weight:500}
+.metric-strip{display:flex;gap:22px;flex-wrap:wrap;margin:14px 0;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.metric-strip-item .v{font-family:var(--font-mono);font-size:17px;font-weight:500}
+.metric-strip-item .l{font-family:var(--font-mono);font-size:9.5px;color:var(--dim-2);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+
+/* Diagram */
+.diagram-wrap{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:24px;margin:18px 0;overflow-x:auto}
+
+/* Screenshot placeholder */
+.shot{border:1px dashed var(--line);border-radius:8px;padding:40px 20px;text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--dim-2);margin:16px 0}
+.shot img{max-width:100%;border-radius:6px;display:block}
+
+footer{border-top:1px solid var(--line);padding:28px 0;text-align:center}
+footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
+
+@media(max-width:600px){
+  .wrap{padding:0 16px}
+  .topnav-inner{padding:16px 16px 0 16px}
+  .statusbar-inner{padding:8px 16px}
+}
+</style>
 </head>
 <body>
-<div class="container">
 
-<!-- HEADER -->
-<div class="header">
-    <div class="header-left">
-        <h1><span style="color:#fb8b1e">Algorithmic Trading Bot</span></h1>
-        <p>Quantitative Research Portfolio &middot; Python, Machine Learning & Statistics</p>
+<!-- ═══════════ STATUS BAR — signature sparkline ═══════════ -->
+<div class="statusbar">
+  <div class="statusbar-inner">
+    <span class="livedot"></span>
+    <span class="livelabel">Live</span>
+    {% if regime %}
+    <span class="regime-chip bg-{{ regime.regime }}" style="color:var(--{% if regime.regime=='MEAN_REV' %}mr{% elif regime.regime=='TRENDING' %}tr{% elif regime.regime=='HIGH_VOL' %}hv{% else %}nt{% endif %})">{{ regime.regime }}</span>
+    {% endif %}
+    <div class="spark-wrap">
+      <span class="spark-label">ETH HURST · 40 CYCLES</span>
+      <canvas id="sparkline" height="28"></canvas>
     </div>
-    <div style="text-align:right">
-        <span class="badge-live"><span class="update-dot"></span> Live</span>
-        <div style="font-size:11px;color:#334155;margin-top:4px">{{ last_update }}</div>
-    </div>
+    <span class="statusbar-time">{{ last_update }} UTC+0</span>
+  </div>
 </div>
 
-<!-- TABS -->
-<div class="tabs">
-    <button class="tab active" onclick="switchTab('dashboard',this)">Dashboard</button>
-    <button class="tab" onclick="switchTab('approach',this)">Approach</button>
-    <button class="tab" onclick="switchTab('profile',this)">About me</button>
+<!-- ═══════════ NAV ═══════════ -->
+<div class="topnav">
+  <div class="topnav-inner">
+    <div>
+      <div class="brand">Paul Arnaud-Battandier<span>.</span></div>
+      <div class="brand-sub">Quant Research Terminal — Market-Neutral Crypto Systems</div>
+    </div>
+    <div class="navtabs">
+      <button class="navtab active" onclick="nav('about',this)">About</button>
+      <button class="navtab" onclick="nav('dashboard',this)">Dashboard</button>
+      <button class="navtab" onclick="nav('research',this)">Research</button>
+    </div>
+  </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- TAB DASHBOARD                                             -->
-<!-- ══════════════════════════════════════════════════════════ -->
-<div id="tab-dashboard" class="tab-content active">
+<div class="wrap">
 
-    <!-- Résumé global -->
-    <div class="grid-4">
-        <div class="metric">
-            <div class="metric-label">Capital Total</div>
-            <div class="metric-value">${{ "%.2f"|format(global_capital or 0) }}</div>
-            <div class="metric-sub">StatArb + Funding Carry</div>
-        </div>
-        <div class="metric">
-            <div class="metric-label">StatArb P&L</div>
-            <div class="metric-value {% if statarb.stats.total_pnl > 0 %}pnl-pos{% elif statarb.stats.total_pnl < 0 %}pnl-neg{% else %}pnl-neu{% endif %}">
-                {% if statarb.stats.total_pnl > 0 %}+{% endif %}{{ "%.2f"|format(statarb.stats.total_pnl) }}%
-            </div>
-            <div class="metric-sub">{{ statarb.stats.total_trades }} trades fermés</div>
-        </div>
-        <div class="metric">
-            <div class="metric-label">Funding Collecté</div>
-            <div class="metric-value {% if funding.stats.total_funding_all_time > 0 %}pnl-pos{% else %}pnl-neu{% endif %}">
-                ${{ "%.4f"|format(funding.stats.total_funding_all_time or 0) }}
-            </div>
-            <div class="metric-sub">{{ funding.stats.total_closed_positions }} positions fermées</div>
-        </div>
-        <div class="metric">
-            <div class="metric-label">Régime Actuel</div>
-            <div class="metric-value" style="font-size:1.4rem">
-                {% if regime %}
-                    {% if regime.regime == 'MEAN_REV' %}🟢 {{ regime.regime }}
-                    {% elif regime.regime == 'TRENDING' %}🟡 {{ regime.regime }}
-                    {% elif regime.regime == 'HIGH_VOL' %}🔴 {{ regime.regime }}
-                    {% else %}⚪ {{ regime.regime }}{% endif %}
-                {% else %}—{% endif %}
-            </div>
-            <div class="metric-sub">{{ regime.timestamp if regime else '' }}</div>
-        </div>
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- PAGE: ABOUT -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="page-about" class="page active">
+
+  <div class="hero-about">
+    <div class="avatar">PAB</div>
+    <div>
+      <h1>Building systems that trade<br>without needing to be right<br>about direction.</h1>
+      <div class="about-links">
+        <a class="link-btn primary" href="/static/CV_Paul_Arnaud-Battandier.pdf" target="_blank">↓ Download CV</a>
+        <a class="link-btn" href="https://www.linkedin.com/in/paul-arnaud-battandier/" target="_blank">LinkedIn</a>
+        <a class="link-btn" href="https://github.com/Paul-Arnaud-Battandier" target="_blank">GitHub</a>
+      </div>
     </div>
+  </div>
 
-    <!-- Sous-onglets stratégies -->
-    <div class="tabs" style="justify-content:flex-start;margin-bottom:1.25rem;border-bottom:1px solid #1e2432">
-        <button class="tab active" onclick="switchSubTab('statarb',this)" style="font-size:12px">📊 Statistical Arbitrage</button>
-        <button class="tab" onclick="switchSubTab('funding',this)" style="font-size:12px">💰 Funding Rate Carry</button>
+  <div class="card" style="margin-bottom:40px">
+    <div class="eyebrow">Currently</div>
+    <p style="color:var(--dim);font-size:14.5px;max-width:700px">
+      Finance &amp; Quantitative Engineering student at ECE Paris, seeking an end-of-studies
+      internship <strong style="color:var(--ink)">(Jan/Feb 2027)</strong> in trading or quantitative research.
+      This site is the live output of that preparation — a regime-switching, market-neutral
+      trading system running continuously on paper capital, documented end to end.
+    </p>
+  </div>
+
+  <div class="about-section">
+    <h3>Working style</h3>
+    <p>Analytical and pragmatic — drawn to the intersection of mathematics, software, and
+      market microstructure. I build systems that fail loudly and cheaply in research before
+      they're ever allowed near live capital, paper or real. No black boxes: every strategy
+      on this site is accompanied by the reasoning, the failed attempts, and the fee math
+      that decided whether it shipped.</p>
+  </div>
+
+  <div class="about-section">
+    <h3>Technical core</h3>
+    <p>Python-first (pandas, statsmodels, scikit-learn, LightGBM), with a working foundation
+      in Lopez de Prado's applied ML framework — Triple Barrier labeling, meta-labeling,
+      purged cross-validation. Comfortable across the full pipeline: exchange APIs,
+      statistical validation, model training, live deployment, and the infrastructure
+      (Supabase, Render, background job orchestration) that keeps it running unattended.</p>
+    <div class="skill-tags">
+      <span class="skill-tag">Python</span><span class="skill-tag">pandas / numpy</span>
+      <span class="skill-tag">statsmodels</span><span class="skill-tag">LightGBM</span>
+      <span class="skill-tag">scikit-learn</span><span class="skill-tag">ccxt</span>
+      <span class="skill-tag">Cointegration</span><span class="skill-tag">Meta-Labeling</span>
+      <span class="skill-tag">Flask</span><span class="skill-tag">PostgreSQL</span>
     </div>
+  </div>
 
-    <!-- ═══════════ SUB-TAB: STAT ARB ═══════════ -->
-    <div id="subtab-statarb" class="subtab-content active">
-
-        <div class="grid-4">
-            <div class="metric">
-                <div class="metric-label">Capital</div>
-                <div class="metric-value">${{ "%.2f"|format(statarb.current.equity_usdt or 0) }}</div>
-                <div class="metric-sub">
-                    <span class="badge rounded-pill badge-{{ statarb.current.position_status or 'FLAT' }} px-2" style="font-size:10px">
-                        {{ statarb.current.position_status or 'FLAT' }}
-                    </span>
-                </div>
-            </div>
-            <div class="metric">
-                <div class="metric-label">P&L Total</div>
-                <div class="metric-value {% if statarb.stats.total_pnl > 0 %}pnl-pos{% elif statarb.stats.total_pnl < 0 %}pnl-neg{% else %}pnl-neu{% endif %}">
-                    {% if statarb.stats.total_pnl > 0 %}+{% endif %}{{ "%.2f"|format(statarb.stats.total_pnl) }}%
-                </div>
-                <div class="metric-sub">moy. {{ "%.3f"|format(statarb.stats.avg_pnl) }}% / trade</div>
-            </div>
-            <div class="metric">
-                <div class="metric-label">Win Rate</div>
-                <div class="metric-value {% if statarb.stats.win_rate >= 55 %}pnl-pos{% elif statarb.stats.win_rate >= 45 %}pnl-neu{% else %}pnl-neg{% endif %}">
-                    {{ statarb.stats.win_rate }}%
-                </div>
-                <div class="metric-sub">{{ statarb.stats.total_trades }} trades fermés</div>
-            </div>
-            <div class="metric">
-                <div class="metric-label">TP / SL</div>
-                <div class="metric-value">
-                    <span class="pnl-pos">{{ statarb.stats.tp_count }}</span>
-                    <span style="color:#334155;font-size:1.2rem"> / </span>
-                    <span class="pnl-neg">{{ statarb.stats.sl_count }}</span>
-                </div>
-                <div class="metric-sub">Take Profit / Stop Loss</div>
-            </div>
-        </div>
-
-        {% if regime %}
-        <div class="grid-2">
-            <div class="card">
-                <div class="card-title">Régime Actuel (BTC vol + ETH Hurst)</div>
-                <div style="display:flex;align-items:center;gap:16px">
-                    <span style="font-size:2rem">
-                        {% if regime.regime == 'MEAN_REV' %}🟢
-                        {% elif regime.regime == 'TRENDING' %}🟡
-                        {% elif regime.regime == 'HIGH_VOL' %}🔴
-                        {% else %}⚪{% endif %}
-                    </span>
-                    <div>
-                        <div class="fw-bold fs-5">{{ regime.regime }}</div>
-                        <div style="font-size:11px;color:#475569;margin-top:2px">{{ regime.timestamp }}</div>
-                    </div>
-                    <div style="margin-left:auto;text-align:right;font-size:12px;color:#64748b">
-                        <div>BTC Vol <span style="color:#e2e8f0">{{ "%.4f"|format(regime.btc_vol or 0) }}</span></div>
-                        <div>ETH Hurst <span style="color:#e2e8f0">{{ "%.4f"|format(regime.eth_hurst or 0) }}</span></div>
-                        <div>ETH ADX <span style="color:#e2e8f0">{{ "%.1f"|format(regime.eth_adx or 0) }}</span></div>
-                    </div>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-title">Position Ouverte</div>
-                <div style="display:flex;align-items:center;justify-content:space-between">
-                    <div>
-                        <span class="badge rounded-pill badge-{{ statarb.current.position_status or 'FLAT' }} px-3 py-2" style="font-size:13px">
-                            {{ statarb.current.position_status or 'FLAT' }}
-                        </span>
-                        <div style="font-size:11px;color:#475569;margin-top:8px">{{ statarb.current.num_trades_total or 0 }} trades exécutés au total</div>
-                    </div>
-                    <div style="text-align:right">
-                        <div style="font-size:11px;color:#475569;margin-bottom:2px">PnL Latent</div>
-                        <div style="font-size:1.8rem;font-weight:700" class="{% if (statarb.current.unrealized_pnl_pct or 0) > 0 %}pnl-pos{% elif (statarb.current.unrealized_pnl_pct or 0) < 0 %}pnl-neg{% else %}pnl-neu{% endif %}">
-                            {% if (statarb.current.unrealized_pnl_pct or 0) > 0 %}+{% endif %}{{ "%.3f"|format((statarb.current.unrealized_pnl_pct or 0) * 100) }}%
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="card">
-            <div class="card-title" style="display:flex;justify-content:space-between">
-                <span>Courbe de Capital — StatArb</span>
-                <span style="color:#334155">{{ statarb.chart_values|length }} points</span>
-            </div>
-            <canvas id="statarbChart" height="80"></canvas>
-        </div>
-
-        <div class="card">
-            <div class="card-title">Trades Récents — StatArb</div>
-            <div style="overflow-x:auto">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Timestamp</th><th>Action</th><th>Z-Score</th><th>ML Prob</th>
-                            <th>Prix AAVE</th><th>Prix ETH</th><th>P&L</th><th>Durée</th><th>Raison</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for t in statarb.trades %}
-                        <tr>
-                            <td style="color:#475569;font-size:11px">{{ t.timestamp or '' }}</td>
-                            <td><span class="fw-bold action-{{ t.action or '' }}">{{ t.action or '—' }}</span></td>
-                            <td>{{ "%.2f"|format(t.zscore or 0) }}</td>
-                            <td>{% if t.ml_prob %}{{ "%.0f"|format((t.ml_prob or 0)*100) }}%{% else %}—{% endif %}</td>
-                            <td>${{ "%.2f"|format(t.aave_price or 0) }}</td>
-                            <td>${{ "%.0f"|format(t.eth_price or 0) }}</td>
-                            <td class="fw-bold {% if (t.pnl_pct or 0) > 0 %}pnl-pos{% elif (t.pnl_pct or 0) < 0 %}pnl-neg{% else %}pnl-neu{% endif %}">
-                                {% if t.pnl_pct is not none %}{% if t.pnl_pct > 0 %}+{% endif %}{{ "%.3f"|format(t.pnl_pct * 100) }}%{% else %}—{% endif %}
-                            </td>
-                            <td>{% if t.duration_candles %}{{ t.duration_candles }}b{% else %}—{% endif %}</td>
-                            <td style="font-size:11px">
-                                {% if t.exit_reason == 'TP' %}<span class="pnl-pos">✓ TP</span>
-                                {% elif t.exit_reason and t.exit_reason.startswith('STOP') %}<span class="pnl-neg">✗ {{ t.exit_reason }}</span>
-                                {% elif t.exit_reason == 'TIME_LIMIT' %}<span style="color:#ffa500">⏰</span>
-                                {% else %}—{% endif %}
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr><td colspan="9" style="text-align:center;color:#334155;padding:2rem">Aucun trade enregistré</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="disclaimer">Paper trading only — no real money involved. Pair: AAVE/ETH via cointegration + Rolling OLS hedge ratio, filtered by LightGBM meta-labeling.</div>
-    </div>
-
-    <!-- ═══════════ SUB-TAB: FUNDING CARRY ═══════════ -->
-    <div id="subtab-funding" class="subtab-content">
-
-        <div class="grid-4">
-            <div class="metric">
-                <div class="metric-label">Capital</div>
-                <div class="metric-value">${{ "%.2f"|format(funding.current.equity_usdt or 0) }}</div>
-                <div class="metric-sub">
-                    <span class="badge rounded-pill" style="font-size:10px;{% if funding.current.position_status == 'LONG_SPOT_SHORT_PERP' %}background:#00ff8820;color:#00ff88;border:1px solid #00ff88{% else %}background:#33333320;color:#888;border:1px solid #555{% endif %}">
-                        {{ funding.current.position_status or 'FLAT' }}
-                    </span>
-                </div>
-            </div>
-            <div class="metric">
-                <div class="metric-label">Funding Collecté (position actuelle)</div>
-                <div class="metric-value {% if (funding.current.funding_collected_usd or 0) > 0 %}pnl-pos{% else %}pnl-neu{% endif %}">
-                    ${{ "%.4f"|format(funding.current.funding_collected_usd or 0) }}
-                </div>
-                <div class="metric-sub">{{ funding.current.symbol or '—' }}</div>
-            </div>
-            <div class="metric">
-                <div class="metric-label">Funding Total (all-time)</div>
-                <div class="metric-value {% if funding.stats.total_funding_all_time > 0 %}pnl-pos{% else %}pnl-neu{% endif %}">
-                    ${{ "%.4f"|format(funding.stats.total_funding_all_time or 0) }}
-                </div>
-                <div class="metric-sub">{{ funding.stats.total_closed_positions }} positions fermées</div>
-            </div>
-            <div class="metric">
-                <div class="metric-label">PnL Latent (basis)</div>
-                <div class="metric-value {% if (funding.current.unrealized_pnl_usd or 0) > 0 %}pnl-pos{% elif (funding.current.unrealized_pnl_usd or 0) < 0 %}pnl-neg{% else %}pnl-neu{% endif %}">
-                    ${{ "%.4f"|format(funding.current.unrealized_pnl_usd or 0) }}
-                </div>
-                <div class="metric-sub">Spot vs Perp</div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-title" style="display:flex;justify-content:space-between">
-                <span>Courbe de Capital — Funding Carry</span>
-                <span style="color:#334155">{{ funding.chart_values|length }} points</span>
-            </div>
-            <canvas id="fundingChart" height="80"></canvas>
-        </div>
-
-        <div class="card">
-            <div class="card-title">Trades Récents — Funding Carry</div>
-            <div style="overflow-x:auto">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Timestamp</th><th>Action</th><th>Symbole</th><th>Prix Spot</th>
-                            <th>Prix Perp</th><th>Basis</th><th>Funding APR</th><th>Funding Total</th><th>Raison</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for t in funding.trades %}
-                        <tr>
-                            <td style="color:#475569;font-size:11px">{{ t.timestamp or '' }}</td>
-                            <td>
-                                <span class="fw-bold" style="{% if t.action == 'ENTRY' %}color:#4488ff{% elif t.action == 'EXIT' %}color:#34d399{% else %}color:#888{% endif %}">
-                                    {{ t.action or '—' }}
-                                </span>
-                            </td>
-                            <td>{{ t.symbol or '—' }}</td>
-                            <td>${{ "%.2f"|format(t.spot_price or 0) }}</td>
-                            <td>${{ "%.2f"|format(t.perp_price or 0) }}</td>
-                            <td>{{ "%.3f"|format(t.basis_pct or 0) }}%</td>
-                            <td class="{% if (t.funding_apr or 0) > 0 %}pnl-pos{% else %}pnl-neg{% endif %}">
-                                {{ "%.2f"|format(t.funding_apr or 0) }}%
-                            </td>
-                            <td class="fw-bold {% if (t.total_funding_collected_usd or 0) > 0 %}pnl-pos{% else %}pnl-neu{% endif %}">
-                                ${{ "%.4f"|format(t.total_funding_collected_usd or 0) }}
-                            </td>
-                            <td style="font-size:11px">
-                                {% if t.exit_reason %}
-                                    {% if 'TIME' in t.exit_reason %}<span style="color:#ffa500">⏰ {{ t.exit_reason }}</span>
-                                    {% elif 'NEGATIVE' in t.exit_reason %}<span class="pnl-neg">✗ {{ t.exit_reason }}</span>
-                                    {% else %}{{ t.exit_reason }}{% endif %}
-                                {% else %}—{% endif %}
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr><td colspan="9" style="text-align:center;color:#334155;padding:2rem">Aucun trade enregistré</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="disclaimer">Paper trading only — no real money involved. Market-neutral carry: Long Spot + Short Perpetual, harvesting funding rate payments every 8h. Entry/exit filtered by 30d APR and rolling funding consistency, min. holding period enforced to cover round-trip fees.</div>
-    </div>
+  <div class="about-section">
+    <h3>What I'm looking for</h3>
+    <p>A seat on a proprietary trading, hedge fund, or quantitative research desk where I can
+      contribute to alpha research or execution systems alongside people who'll push my
+      standards higher. Long-term, I want to be the person in the room who's checked the
+      fee math before anyone asks.</p>
+  </div>
 
 </div>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- TAB APPROACH                                              -->
-<!-- ══════════════════════════════════════════════════════════ -->
-<div id="tab-approach" class="tab-content">
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- PAGE: DASHBOARD -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="page-dashboard" class="page">
 
-    <div class="card" style="border-left:3px solid #f87171">
-        <div class="card-title" style="color:#f1f5f9">Phase 1 — BTC/USDT 4H Swing Trading <span style="color:#f87171">(Abandoned)</span></div>
-        <div class="phase-section">
-            <div class="phase-block"><div class="section-label">Research & Strategy</div>
-                <strong>Asset:</strong> BTC/USDT. <strong>Market Characteristics:</strong> 24/7/365 trading environment, heavily retail-driven, distinct cyclical regimes. <strong>Horizon:</strong> Swing Trading. <strong>Drivers:</strong> Funding Rates, on-chain flows, macroeconomic cyclicality. <strong>Capital:</strong> 100€ initial budget (Forward-testing via Binance Testnet). <strong>Costs:</strong> Binance Futures (Maker: 0.02% | Taker: 0.05%).
-            </div>
-            <div class="phase-block"><div class="section-label">Data</div>
-                <strong>Market:</strong> OHLCV. <strong>Alternative:</strong> Funding Rate, Fear & Greed Index. <strong>Macro:</strong> DXY, Equities (via yfinance). <strong>Excluded:</strong> Open Interest (historical data unavailable at required granularity).
-            </div>
-            <div class="phase-block"><div class="section-label">Training</div>
-                <em>Phase 1 (Directional):</em> XGBoost (outperformed LightGBM), 4H horizon predicting T+24H (rolling window), Optuna TPE tuning.<br>
-                <em>Phase 2 (Meta-Labeling):</em> Random Forest Classifier. Triple Barrier Setup: PT = 1.5x Vol, SL = 1.0x Vol, TL = 24h.<br>
-                Break-even required &gt; 40.0% precision. Primary model alone yielded 33.25% (Unprofitable). Meta-Model reached 55.14% at 54.0% confidence threshold.
-            </div>
-            <div class="abandoned-box"><div class="section-label" style="color:#f87171">Backtest & The Pivot</div>
-                The 4H market exhibited too much of a "Random Walk" with severe intrabar noise. Impossible at this scale to construct a robust, winning strategy without massive capital to absorb drawdowns.<br>
-                <strong>Decision: Pivot to 15-minute BTC Up or Down binary contracts on Polymarket.</strong>
-            </div>
-        </div>
+  <div class="eyebrow">Live — Binance Demo Trading</div>
+  <h1 style="font-size:28px;margin-bottom:6px">Portfolio Overview</h1>
+  <p class="lede">Paper capital, real market data, real execution logic. Updated every 30s.</p>
+
+  <div class="grid grid-4" style="margin-top:28px">
+    <div class="stat">
+      <div class="stat-label">Total Capital</div>
+      <div class="stat-value">${{ "%.2f"|format(global_capital or 0) }}</div>
+      <div class="stat-sub">StatArb + Funding Carry</div>
     </div>
-
-    <div class="card" style="border-left:3px solid #f87171">
-        <div class="card-title" style="color:#f1f5f9">Phase 2 — Polymarket 15-Minute Binary Bot <span style="color:#f87171">(Abandoned)</span></div>
-        <div class="phase-section">
-            <div class="phase-block"><div class="section-label">Research & Strategy</div>
-                <strong>Asset:</strong> Polymarket BTC Up/Down Contracts. <strong>Horizon:</strong> 15 minutes. <strong>Advantage:</strong> Eliminates stop-loss hunting, slippage, and complex position sizing. The binary label resolves precisely at close[t+15] &gt; close[t], providing a mathematically pristine environment for the algorithm.
-            </div>
-            <div class="phase-block"><div class="section-label">Data</div>
-                <strong>Memory:</strong> Binance OHLCV 1m API (Incremental updates). <strong>Execution:</strong> Polymarket Gamma API (Dynamic token IDs) &amp; CLOB API (Order book matching).
-            </div>
-            <div class="phase-block"><div class="section-label">Features</div>
-                Engineered specific short-term inertia indicators: Rolling Volatility (60m std), Momentum (5m &amp; 15m returns), Volume Surge (vs 4H mean), and RSI (14-period). Absolute prices were strictly excluded to prevent look-ahead bias.
-            </div>
-            <div class="phase-block"><div class="section-label">Deployment</div>
-                Autonomous Python architecture deployed on Render. Scheduled via APScheduler at hh:02, hh:17, hh:32, hh:47 UTC. Flask dashboard acting as a live terminal with real-time logging and dynamic risk shielding (abort if bid/ask spread &gt; $0.05).
-            </div>
-            <div class="abandoned-box"><div class="section-label" style="color:#f87171">Live Diagnosis & The Pivot</div>
-                Market microstructure and liquidity constraints on Polymarket invalidate high-frequency directional trading. Target market showed a spread of $0.98 — risking $0.99 to gain $0.01 requires a &gt;99.1% win rate, making the strategy mathematically unviable.<br>
-                <strong>Decision: Pivot to Statistical Arbitrage (Pairs Trading) on Binance Futures.</strong>
-            </div>
-        </div>
+    <div class="stat">
+      <div class="stat-label">StatArb P&amp;L</div>
+      <div class="stat-value {% if statarb.stats.total_pnl > 0 %}up{% elif statarb.stats.total_pnl < 0 %}down{% else %}neu{% endif %}">
+        {% if statarb.stats.total_pnl > 0 %}+{% endif %}{{ "%.2f"|format(statarb.stats.total_pnl) }}%
+      </div>
+      <div class="stat-sub">{{ statarb.stats.total_trades }} closed trades</div>
     </div>
-
-    <div class="card" style="border-left:3px solid #3b82f6">
-        <div class="card-title" style="color:#f1f5f9">Phase 3 — Statistical Arbitrage + Regime Detector <span style="color:#60a5fa">(Live Demo)</span></div>
-        <div class="phase-section">
-            <div class="phase-block"><div class="section-label">Concept & Strategy</div>
-                <strong>Market Neutral</strong> approach (Pairs Trading). By identifying two strongly co-integrated assets (AAVE/ETH), the algorithm trades the "spread" (mathematical divergence between them) rather than attempting to predict absolute price direction. Zero directional market exposure.
-            </div>
-            <div class="phase-block"><div class="section-label">Statistical Foundation</div>
-                Pair selection via <strong>Engle-Granger cointegration test</strong> (p-value &lt; 0.05) + <strong>Hurst Exponent</strong> (&lt; 0.5 = mean-reversion) + <strong>ADF out-of-sample</strong> stationarity test. Hedge ratio estimated dynamically via <strong>Rolling OLS</strong> (institutional standard) to avoid stale ratio drift.
-            </div>
-            <div class="phase-block"><div class="section-label">ML Layer (Meta-Labeling)</div>
-                A <strong>LightGBM classifier</strong> acts as a "gatekeeper" — only allowing entries when confidence &gt; 60%. Features: Z-score momentum (1h/4h), volatility regime, directional returns. Trained via Lopez de Prado's <strong>Triple Barrier Method</strong> (TP=Z→0 / SL=Z≥4 / Time=24h). Baseline win-rate: 58.7% → ML-filtered: 88.67%.
-            </div>
-            <div class="phase-block"><div class="section-label">Regime Detector</div>
-                A two-level macro filter runs every hour: <strong>BTC realized volatility</strong> detects systemic stress (HIGH_VOL → funding carry activated), while <strong>ETH Hurst + ADX</strong> detects the microstructure regime (MEAN_REV → stat arb / TRENDING → momentum). Validated via walk-forward across 3 distinct market periods with Hurst separation of 0.21+ between regimes.
-            </div>
-            <div class="phase-block"><div class="section-label">Risk Management</div>
-                Three independent stop-loss layers: <strong>Z-Score SL</strong> (Z ≥ ±6.0, black swan), <strong>PnL SL</strong> (-5% of exposed capital, beta mismatch protection), <strong>Time Barrier</strong> (48h maximum holding, mean-reversion timeout). Position recovery on restart via live Binance API query.
-            </div>
-            <div class="phase-block"><div class="section-label">Architecture</div>
-                Fully autonomous Python pipeline: <code>fetch_data → build_features → train_model → backtest → live_bot</code>. Weekly automated pair rescanning selects the best cointegrated pair from 11 candidates. Regime + pair selection written to JSON, consumed by the trading bot at each 15m cycle.
-            </div>
-            <div style="background:#052e16;border:1px solid #065f46;padding:12px;border-radius:6px;margin-top:8px;font-size:13px;color:#cbd5e1;line-height:1.6">
-                <div class="section-label" style="color:#34d399">Current Status</div>
-                Running live on Binance Demo (Futures Paper Trading). Regime: MEAN_REV (ETH Hurst 0.27). Stat arb active on AAVE/ETH. Data persisted to Supabase, dashboard auto-refreshes every 30s.
-            </div>
-        </div>
+    <div class="stat">
+      <div class="stat-label">Funding Collected</div>
+      <div class="stat-value {% if funding.stats.total_funding_all_time > 0 %}up{% else %}neu{% endif %}">
+        ${{ "%.4f"|format(funding.stats.total_funding_all_time or 0) }}
+      </div>
+      <div class="stat-sub">{{ funding.stats.total_closed_positions }} closed positions</div>
     </div>
+    <div class="stat">
+      <div class="stat-label">Regime</div>
+      <div class="stat-value c-{{ regime.regime if regime else 'NEUTRAL' }}" style="font-size:18px">
+        {{ regime.regime if regime else '—' }}
+      </div>
+      <div class="stat-sub">{{ regime.timestamp if regime else '' }}</div>
+    </div>
+  </div>
 
+  <!-- ═══ STATARB SECTION ═══ -->
+  <div class="strat-header">
+    <div class="strat-icon" style="border-color:var(--mr);color:var(--mr)">Σ</div>
+    <div>
+      <div class="strat-title">Statistical Arbitrage</div>
+      <div class="strat-desc">AAVE/USDT ⇄ ETH/USDT · Cointegration + LightGBM meta-labeling · active in MEAN_REV</div>
+    </div>
+  </div>
+
+  <div class="grid grid-4">
+    <div class="stat">
+      <div class="stat-label">Capital</div>
+      <div class="stat-value">${{ "%.2f"|format(statarb.current.equity_usdt or 0) }}</div>
+      <div class="stat-sub"><span class="badge" style="border-color:var(--line)">{{ statarb.current.position_status or 'FLAT' }}</span></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">P&amp;L Total</div>
+      <div class="stat-value {% if statarb.stats.total_pnl > 0 %}up{% elif statarb.stats.total_pnl < 0 %}down{% else %}neu{% endif %}">
+        {% if statarb.stats.total_pnl > 0 %}+{% endif %}{{ "%.2f"|format(statarb.stats.total_pnl) }}%
+      </div>
+      <div class="stat-sub">avg {{ "%.3f"|format(statarb.stats.avg_pnl) }}% / trade</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Win Rate</div>
+      <div class="stat-value {% if statarb.stats.win_rate >= 55 %}up{% elif statarb.stats.win_rate >= 45 %}neu{% else %}down{% endif %}">{{ statarb.stats.win_rate }}%</div>
+      <div class="stat-sub">{{ statarb.stats.total_trades }} closed trades</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">TP / SL</div>
+      <div class="stat-value"><span class="up">{{ statarb.stats.tp_count }}</span><span style="color:var(--dim-2)"> / </span><span class="down">{{ statarb.stats.sl_count }}</span></div>
+      <div class="stat-sub">Take Profit / Stop Loss</div>
+    </div>
+  </div>
+
+  {% if regime %}
+  <div class="grid grid-2" style="margin-top:14px">
     <div class="card">
-        <div class="card-title">Sources & Acknowledgements</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
-            <span class="tech-tag" style="border-color:#fb8b1e;color:#fb8b1e">Advances in Financial Machine Learning (Marcos Lopez de Prado)</span>
-            <span class="tech-tag">LightGBM</span>
-            <span class="tech-tag">ccxt</span>
-            <span class="tech-tag">statsmodels</span>
-            <span class="tech-tag">Supabase</span>
-            <span class="tech-tag">Render</span>
-            <span class="tech-tag">Gemini Pro</span>
-            <span class="tech-tag">Claude</span>
-        </div>
+      <div class="stat-label" style="margin-bottom:14px">Current Regime Readout</div>
+      <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:12.5px">
+        <span style="color:var(--dim)">BTC Vol</span><span>{{ "%.4f"|format(regime.btc_vol or 0) }}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:12.5px;margin-top:6px">
+        <span style="color:var(--dim)">ETH Hurst</span><span>{{ "%.4f"|format(regime.eth_hurst or 0) }}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:12.5px;margin-top:6px">
+        <span style="color:var(--dim)">ETH ADX</span><span>{{ "%.1f"|format(regime.eth_adx or 0) }}</span>
+      </div>
     </div>
-</div>
-
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- TAB ABOUT ME                                              -->
-<!-- ══════════════════════════════════════════════════════════ -->
-<div id="tab-profile" class="tab-content">
     <div class="card">
-        <div style="display:flex;align-items:center;gap:18px;margin-bottom:1.5rem">
-            <div class="profile-avatar">PAB</div>
-            <div>
-                <p style="font-size:22px;font-weight:600;color:#f1f5f9">Paul Arnaud-Battandier</p>
-                <p style="font-size:14px;color:#cbd5e1;margin-top:4px">Major in Finance &amp; Quantitative Engineering &middot; ECE Paris</p>
-                <p style="font-size:15px;color:#fb8b1e;margin-top:6px;font-weight:500">Seeking an end-of-studies internship &middot; Jan/Feb 2027 &middot; Trading or Quantitative Research</p>
-            </div>
+      <div class="stat-label" style="margin-bottom:14px">Open Position</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="badge" style="border-color:var(--line)">{{ statarb.current.position_status or 'FLAT' }}</span>
+        <div style="text-align:right">
+          <div class="stat-label" style="margin-bottom:2px">Unrealized</div>
+          <div class="mono {% if (statarb.current.unrealized_pnl_pct or 0) > 0 %}up{% elif (statarb.current.unrealized_pnl_pct or 0) < 0 %}down{% else %}neu{% endif %}" style="font-size:19px;font-weight:500">
+            {% if (statarb.current.unrealized_pnl_pct or 0) > 0 %}+{% endif %}{{ "%.3f"|format((statarb.current.unrealized_pnl_pct or 0) * 100) }}%
+          </div>
         </div>
-
-        <div style="margin-bottom:1.5rem;display:flex;gap:12px;flex-wrap:wrap">
-            <a class="social-btn" href="https://www.linkedin.com/in/paul-arnaud-battandier/" target="_blank">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
-                LinkedIn
-            </a>
-            <a class="social-btn" href="https://github.com/Paul-Arnaud-Battandier" target="_blank">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
-                GitHub
-            </a>
-            <a class="social-btn" href="/static/CV_Paul_Arnaud-Battandier.pdf" target="_blank" style="border-color:#fb8b1e;color:#fb8b1e;background:rgba(251,139,30,.05)">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                Download CV
-            </a>
-        </div>
-
-        <div class="divider"></div>
-
-        <div style="display:flex;flex-direction:column;gap:2rem;margin-top:1.5rem">
-            <div>
-                <div class="card-title" style="color:#fb8b1e;font-size:12px">About my personality</div>
-                <p style="font-size:14px;color:#cbd5e1;line-height:1.7">I am highly analytical, pragmatic, and driven by complex problem-solving. I thrive at the intersection of mathematics, computer science, and financial markets. I believe in building robust, data-driven systems without "black box" illusions, always focusing on statistical edge, strict risk management, and clean architecture.</p>
-            </div>
-            <div>
-                <div class="card-title" style="color:#fb8b1e;font-size:12px">My core skills</div>
-                <p style="font-size:14px;color:#cbd5e1;line-height:1.7">My technical stack is centered around Quantitative Finance and Machine Learning. I specialize in Python (Pandas, NumPy, Scikit-Learn) and predictive modeling (LightGBM, Random Forest, XGBoost). I am heavily influenced by Marcos Lopez de Prado's framework for <em>Advances in Financial Machine Learning</em> (Purged CV, fractional differentiation, meta-labeling). Beyond research, I build end-to-end pipelines: from API integrations to live cloud deployments.</p>
-            </div>
-            <div>
-                <div class="card-title" style="color:#fb8b1e;font-size:12px">My ambitions</div>
-                <p style="font-size:14px;color:#cbd5e1;line-height:1.7">My immediate goal is to secure an end-of-studies internship in a fast-paced proprietary trading firm, hedge fund, or quantitative research desk. I want to surround myself with industry experts, contribute to alpha generation or execution optimization, and ultimately evolve into a top-tier Quantitative Researcher or Algorithmic Trader.</p>
-            </div>
-        </div>
+      </div>
     </div>
+  </div>
+  {% endif %}
+
+  <div class="card" style="margin-top:14px">
+    <div class="stat-label" style="margin-bottom:12px">Equity Curve</div>
+    <canvas id="statarbChart" height="70"></canvas>
+  </div>
+
+  <div class="card-flush" style="margin-top:14px">
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Timestamp</th><th>Action</th><th>Z-Score</th><th>ML Prob</th><th>AAVE</th><th>ETH</th><th>P&amp;L</th><th>Duration</th><th>Reason</th></tr></thead>
+        <tbody>
+          {% for t in statarb.trades %}
+          <tr>
+            <td style="color:var(--dim-2)">{{ t.timestamp or '' }}</td>
+            <td style="color:{% if t.action=='EXIT' %}var(--mr){% elif t.action=='LONG_SPREAD' %}var(--carry){% elif t.action=='SHORT_SPREAD' %}var(--tr){% else %}var(--dim-2){% endif %}">{{ t.action or '—' }}</td>
+            <td>{{ "%.2f"|format(t.zscore or 0) }}</td>
+            <td>{% if t.ml_prob %}{{ "%.0f"|format((t.ml_prob or 0)*100) }}%{% else %}—{% endif %}</td>
+            <td>${{ "%.2f"|format(t.aave_price or 0) }}</td>
+            <td>${{ "%.0f"|format(t.eth_price or 0) }}</td>
+            <td class="{% if (t.pnl_pct or 0) > 0 %}up{% elif (t.pnl_pct or 0) < 0 %}down{% else %}neu{% endif %}">
+              {% if t.pnl_pct is not none %}{% if t.pnl_pct > 0 %}+{% endif %}{{ "%.3f"|format(t.pnl_pct * 100) }}%{% else %}—{% endif %}
+            </td>
+            <td>{% if t.duration_candles %}{{ t.duration_candles }}c{% else %}—{% endif %}</td>
+            <td>
+              {% if t.exit_reason == 'TP' %}<span class="up">TP</span>
+              {% elif t.exit_reason and t.exit_reason.startswith('STOP') %}<span class="down">{{ t.exit_reason }}</span>
+              {% elif t.exit_reason == 'TIME_LIMIT' %}<span style="color:var(--tr)">TIME</span>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="9">No trades logged yet</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="disclaimer">Paper trading only — no real funds involved. Pair selected via Engle-Granger cointegration + Rolling OLS hedge ratio, entries filtered by LightGBM meta-labeling (60% confidence threshold). Three independent stop-loss layers active.</div>
+
+  <!-- ═══ FUNDING CARRY SECTION ═══ -->
+  <div class="strat-header">
+    <div class="strat-icon" style="border-color:var(--carry);color:var(--carry)">%</div>
+    <div>
+      <div class="strat-title">Funding Rate Carry</div>
+      <div class="strat-desc">Long Spot ⇄ Short Perpetual · Delta-neutral · active in HIGH_VOL / NEUTRAL</div>
+    </div>
+  </div>
+
+  <div class="grid grid-4">
+    <div class="stat">
+      <div class="stat-label">Capital</div>
+      <div class="stat-value">${{ "%.2f"|format(funding.current.equity_usdt or 0) }}</div>
+      <div class="stat-sub"><span class="badge" style="border-color:{% if funding.current.position_status == 'LONG_SPOT_SHORT_PERP' %}var(--mr){% else %}var(--line){% endif %}">{{ funding.current.position_status or 'FLAT' }}</span></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Position Funding</div>
+      <div class="stat-value {% if (funding.current.funding_collected_usd or 0) > 0 %}up{% else %}neu{% endif %}">${{ "%.4f"|format(funding.current.funding_collected_usd or 0) }}</div>
+      <div class="stat-sub">{{ funding.current.symbol or '—' }}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">All-Time Funding</div>
+      <div class="stat-value {% if funding.stats.total_funding_all_time > 0 %}up{% else %}neu{% endif %}">${{ "%.4f"|format(funding.stats.total_funding_all_time or 0) }}</div>
+      <div class="stat-sub">{{ funding.stats.total_closed_positions }} closed positions</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Unrealized Basis</div>
+      <div class="stat-value {% if (funding.current.unrealized_pnl_usd or 0) > 0 %}up{% elif (funding.current.unrealized_pnl_usd or 0) < 0 %}down{% else %}neu{% endif %}">${{ "%.4f"|format(funding.current.unrealized_pnl_usd or 0) }}</div>
+      <div class="stat-sub">Spot vs Perp</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="stat-label" style="margin-bottom:12px">Equity Curve</div>
+    <canvas id="fundingChart" height="70"></canvas>
+  </div>
+
+  <div class="card-flush" style="margin-top:14px">
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Timestamp</th><th>Action</th><th>Symbol</th><th>Spot</th><th>Perp</th><th>Basis</th><th>Funding APR</th><th>Total Funding</th><th>Reason</th></tr></thead>
+        <tbody>
+          {% for t in funding.trades %}
+          <tr>
+            <td style="color:var(--dim-2)">{{ t.timestamp or '' }}</td>
+            <td style="color:{% if t.action=='ENTRY' %}var(--carry){% elif t.action=='EXIT' %}var(--mr){% else %}var(--dim-2){% endif %}">{{ t.action or '—' }}</td>
+            <td>{{ t.symbol or '—' }}</td>
+            <td>${{ "%.2f"|format(t.spot_price or 0) }}</td>
+            <td>${{ "%.2f"|format(t.perp_price or 0) }}</td>
+            <td>{{ "%.3f"|format(t.basis_pct or 0) }}%</td>
+            <td class="{% if (t.funding_apr or 0) > 0 %}up{% else %}down{% endif %}">{{ "%.2f"|format(t.funding_apr or 0) }}%</td>
+            <td class="{% if (t.total_funding_collected_usd or 0) > 0 %}up{% else %}neu{% endif %}">${{ "%.4f"|format(t.total_funding_collected_usd or 0) }}</td>
+            <td>
+              {% if t.exit_reason %}
+                {% if 'TIME' in t.exit_reason %}<span style="color:var(--tr)">{{ t.exit_reason }}</span>
+                {% elif 'NEGATIVE' in t.exit_reason %}<span class="down">{{ t.exit_reason }}</span>
+                {% else %}{{ t.exit_reason }}{% endif %}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="9">No trades logged yet</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="disclaimer">Paper trading only — no real funds involved. Universe filtered on 30d APR &gt; 4%, positive-payment consistency &gt; 60%, checked every 8h at Binance funding timestamps. Exit on rolling 5-payment average turning negative or 45-day time limit.</div>
+
+  <!-- Screenshot placeholder slot -->
+  <div class="shot">
+    <img src="/static/screenshots/binance_position.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+    <div style="display:none">SCREENSHOT SLOT — drop binance_position.png in Web_Dashboard/static/screenshots/</div>
+  </div>
+
 </div>
 
-</div><!-- /container -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- PAGE: RESEARCH — reverse chronological -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="page-research" class="page">
+
+  <div class="eyebrow">Research Log</div>
+  <h1 style="font-size:28px;margin-bottom:6px">From directional prediction<br>to market-neutral carry.</h1>
+  <p class="lede">Ordered newest first. Every phase includes what was tested, what the numbers said, and why it did or didn't ship.</p>
+
+  <!-- Architecture diagram -->
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 900 260" style="width:100%;height:auto;font-family:'IBM Plex Mono',monospace">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#5b6472"/></marker>
+      </defs>
+      <!-- Regime detector -->
+      <rect x="350" y="10" width="200" height="52" rx="6" fill="#12161d" stroke="#ffb020" stroke-width="1.2"/>
+      <text x="450" y="32" text-anchor="middle" fill="#ffb020" font-size="11" letter-spacing="1">REGIME DETECTOR</text>
+      <text x="450" y="48" text-anchor="middle" fill="#8a94a6" font-size="9">BTC vol · ETH Hurst/ADX</text>
+
+      <line x1="450" y1="62" x2="450" y2="90" stroke="#5b6472" stroke-width="1"/>
+      <line x1="450" y1="90" x2="180" y2="90" stroke="#5b6472" stroke-width="1"/>
+      <line x1="450" y1="90" x2="720" y2="90" stroke="#5b6472" stroke-width="1"/>
+      <line x1="180" y1="90" x2="180" y2="112" stroke="#5b6472" stroke-width="1" marker-end="url(#arrow)"/>
+      <line x1="720" y1="90" x2="720" y2="112" stroke="#5b6472" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <text x="180" y="105" text-anchor="middle" fill="#2dd4a7" font-size="9">MEAN_REV</text>
+      <text x="720" y="105" text-anchor="middle" fill="#5b9dff" font-size="9">HIGH_VOL / NEUTRAL</text>
+
+      <!-- StatArb -->
+      <rect x="60" y="115" width="240" height="56" rx="6" fill="#12161d" stroke="#2dd4a7" stroke-width="1.2"/>
+      <text x="180" y="138" text-anchor="middle" fill="#2dd4a7" font-size="11" letter-spacing="1">STATISTICAL ARBITRAGE</text>
+      <text x="180" y="155" text-anchor="middle" fill="#8a94a6" font-size="9">AAVE/ETH · Cointegration + LightGBM</text>
+
+      <!-- Funding -->
+      <rect x="600" y="115" width="240" height="56" rx="6" fill="#12161d" stroke="#5b9dff" stroke-width="1.2"/>
+      <text x="720" y="138" text-anchor="middle" fill="#5b9dff" font-size="11" letter-spacing="1">FUNDING RATE CARRY</text>
+      <text x="720" y="155" text-anchor="middle" fill="#8a94a6" font-size="9">Long Spot · Short Perpetual</text>
+
+      <line x1="180" y1="171" x2="180" y2="195" stroke="#5b6472" stroke-width="1"/>
+      <line x1="720" y1="171" x2="720" y2="195" stroke="#5b6472" stroke-width="1"/>
+      <line x1="180" y1="195" x2="450" y2="195" stroke="#5b6472" stroke-width="1"/>
+      <line x1="720" y1="195" x2="450" y2="195" stroke="#5b6472" stroke-width="1"/>
+      <line x1="450" y1="195" x2="450" y2="212" stroke="#5b6472" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <rect x="350" y="215" width="200" height="36" rx="6" fill="#0e1218" stroke="#232a35" stroke-width="1"/>
+      <text x="450" y="238" text-anchor="middle" fill="#e7eaee" font-size="10" letter-spacing="1">SUPABASE → DASHBOARD</text>
+    </svg>
+  </div>
+
+  <div class="rlog">
+
+    <!-- ═══ ENTRY: LIVE TRIPTYCH ═══ -->
+    <div class="rlog-entry">
+      <span class="rlog-dot" style="background:var(--mr)"></span>
+      <span class="rlog-status" style="border-color:var(--mr);color:var(--mr)">● LIVE — DEPLOYED</span>
+      <div class="rlog-title">Regime-Switching Market-Neutral System</div>
+      <div class="rlog-meta">Statistical Arbitrage + Funding Rate Carry, orchestrated by a macro regime detector</div>
+
+      <div class="rblock">
+        <div class="rblock-label">Concept</div>
+        <p>A regime detector runs hourly and decides which of two independent, market-neutral
+          strategies gets capital: Statistical Arbitrage when ETH shows mean-reverting
+          microstructure, Funding Rate Carry when volatility spikes or no clear signal exists.
+          Neither strategy takes directional exposure to crypto prices.</p>
+      </div>
+
+      <h2 style="font-size:16px;margin-top:26px;color:var(--mr)">Layer 0 — Regime Detector</h2>
+      <div class="rblock">
+        <div class="rblock-label">Research → Data → Features</div>
+        <p>Two-level filter: <strong>BTC/USDT realized volatility</strong> (24h rolling, annualized)
+          captures systemic stress; <strong>ETH/USDT Hurst Exponent</strong> (100h rolling) +
+          <strong>ADX</strong> (14-period) capture whether the DeFi/L2 ecosystem ETH anchors is
+          currently mean-reverting or trending — a more relevant proxy for AAVE/ETH-style pairs
+          than BTC alone.</p>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Training — rule-based, not ML</div>
+        <p>Thresholds calibrated on percentile analysis of 1 year of hourly data rather than
+          arbitrary values: BTC vol &gt; 0.60 → <span class="c-HIGH_VOL">HIGH_VOL</span> ·
+          ETH Hurst &gt; 0.47 &amp; ADX &gt; 28 → <span class="c-TRENDING">TRENDING</span> ·
+          ETH Hurst &lt; 0.43 &amp; ADX &lt; 36 → <span class="c-MEAN_REV">MEAN_REV</span> ·
+          else <span class="c-NEUTRAL">NEUTRAL</span>.</p>
+      </div>
+      <div class="metric-strip">
+        <div class="metric-strip-item"><div class="v" style="color:var(--mr)">0.21–0.23</div><div class="l">Hurst separation, walk-forward</div></div>
+        <div class="metric-strip-item"><div class="v">3 × 4mo</div><div class="l">Validation periods incl. -38% BTC</div></div>
+        <div class="metric-strip-item"><div class="v">32/19/12/37%</div><div class="l">MR/TR/HV/NT distribution</div></div>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Deployment → Oversight</div>
+        <p>Background thread, hourly recompute, state shared via Supabase. A live post-deployment
+          event — AAVE/ETH drifting out of the tradable Hurst range during a bull run — was
+          correctly detected and used to suppress new StatArb entries, validating the filter
+          outside of backtest.</p>
+      </div>
+
+      <h2 style="font-size:16px;margin-top:30px;color:var(--mr)">Layer 1 — Statistical Arbitrage</h2>
+      <div class="rblock">
+        <div class="rblock-label">Research → Data → Features</div>
+        <p>Pairs trading: trade the mean-reverting spread of two cointegrated assets instead of
+          predicting direction. Pair selected via <strong>Engle-Granger cointegration</strong>
+          (p&lt;0.05) + <strong>Hurst</strong> (&lt;0.5) + out-of-sample <strong>ADF</strong>.
+          Hedge ratio computed via <strong>Rolling OLS</strong> (200-candle window) rather than a
+          static mean-price ratio, to avoid stale-ratio drift.</p>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Training — LightGBM meta-labeling</div>
+        <p>Labeled via Lopez de Prado's Triple Barrier Method (TP: Z→0, SL: |Z|≥4, 24h limit).
+          The model acts as a gatekeeper — only enters above 60% confidence.</p>
+      </div>
+      <div class="metric-strip">
+        <div class="metric-strip-item"><div class="v">58.71%</div><div class="l">Raw engine win-rate</div></div>
+        <div class="metric-strip-item"><div class="v" style="color:var(--mr)">88.67%</div><div class="l">ML-filtered win-rate (OOS)</div></div>
+        <div class="metric-strip-item"><div class="v">+5.60pp</div><div class="l">Absolute improvement</div></div>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Backtest — an honest negative finding</div>
+        <p>Re-tested 6 months later on refreshed data: raw win-rate dropped to 36.78%, ML-filtered
+          backtest PnL turned negative (-6.74%). Rather than discarding the result, this directly
+          motivated building the Regime Detector instead of trusting one static backtest indefinitely.</p>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Deployment → Oversight</div>
+        <p>Live on Binance Demo Futures, 15m cycle. Three independent stop-losses: Z-Score (|Z|≥6),
+          <strong>PnL (-5%)</strong> — added after observing a live divergence where the Z-Score
+          improved while PnL kept deteriorating from imperfect hedge coverage — and a 48h time
+          barrier. Position recovery via live API query survives service restarts. Weekly
+          re-scan across 11 candidate pairs.</p>
+      </div>
+
+      <h2 style="font-size:16px;margin-top:30px;color:var(--carry)">Layer 2 — Funding Rate Carry</h2>
+      <div class="rblock">
+        <div class="rblock-label">Research</div>
+        <p>Delta-neutral: <strong>Long Spot + Short Perpetual</strong>, harvesting the funding rate
+          paid every 8h by leveraged longs. Placed in HIGH_VOL/NEUTRAL rather than competing with
+          StatArb for MEAN_REV — leverage demand (and funding) typically rises, not falls, during
+          stress, making the two strategies structurally complementary.</p>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Training — fee math before code</div>
+        <p>Round-trip cost (both legs, standard fee tier): <strong>0.30%</strong>. Selection filter:
+          30d APR &gt; 4%, positive-payment consistency &gt; 60%, current rate &gt; 0.</p>
+      </div>
+      <div class="metric-strip">
+        <div class="metric-strip-item"><div class="v">1 / 20</div><div class="l">Symbols cleared the filter</div></div>
+        <div class="metric-strip-item"><div class="v">24.5 days</div><div class="l">Breakeven holding period</div></div>
+        <div class="metric-strip-item"><div class="v">80%</div><div class="l">30d positive-payment rate</div></div>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Deployment → Oversight</div>
+        <p>Checked every 8h at Binance funding timestamps. Exit on a <strong>rolling 5-payment
+          average</strong> turning negative (not a single data point) or a 45-day time limit.
+          Position state persisted to JSON, survives restarts. Every cycle logged to Supabase —
+          including idle FLAT cycles, so "no opportunity found" is as visible as an open position.</p>
+      </div>
+
+      <div class="shot">
+        <img src="/static/screenshots/cointegration_notebook.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div style="display:none">SCREENSHOT SLOT — cointegration_notebook.png</div>
+      </div>
+    </div>
+
+    <!-- ═══ ENTRY: MOMENTUM REJECTED ═══ -->
+    <div class="rlog-entry">
+      <span class="rlog-dot" style="background:var(--hv)"></span>
+      <span class="rlog-status" style="border-color:var(--hv);color:var(--hv)">✕ REJECTED — RESEARCH ONLY</span>
+      <div class="rlog-title">Cross-Sectional Momentum</div>
+      <div class="rlog-meta">Built to fill the idle TRENDING regime slot — didn't clear validation</div>
+
+      <div class="rblock">
+        <div class="rblock-label">Research</div>
+        <p>Rank a 25-symbol universe by trailing return, Long the top N / Short the bottom N,
+          weekly rebalance, equal-weight, market-neutral by construction.</p>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Backtest</div>
+        <p>Grid search across Lookback (14/21/28/35d) × portfolio size (3/5/7) — deliberately not
+          reporting a single cherry-picked run. Best configuration found: Sharpe <strong>-0.01</strong>.
+          Default config: Sharpe -1.28, -26.41% annualized, -35.81% max drawdown.</p>
+      </div>
+      <div class="metric-strip">
+        <div class="metric-strip-item"><div class="v" style="color:var(--hv)">-1.28</div><div class="l">Sharpe ratio</div></div>
+        <div class="metric-strip-item"><div class="v" style="color:var(--hv)">-75.28%</div><div class="l">Long leg return</div></div>
+        <div class="metric-strip-item"><div class="v" style="color:var(--mr)">+49.52%</div><div class="l">Short leg return</div></div>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Decision</div>
+        <p>The ranking signal was effectively inverted — recent winners underperformed, recent
+          losers rebounded — consistent with a mean-reverting macro backdrop rather than genuine
+          trend during the test window. Rejected after quantitative validation rather than deployed.
+          The TRENDING slot remains unallocated pending a strategy that clears the same bar as
+          the two live layers.</p>
+      </div>
+    </div>
+
+    <!-- ═══ ENTRY: POLYMARKET ═══ -->
+    <div class="rlog-entry">
+      <span class="rlog-dot" style="background:var(--dim-2)"></span>
+      <span class="rlog-status" style="border-color:var(--dim-2);color:var(--dim-2)">◐ PIVOTED</span>
+      <div class="rlog-title">Polymarket 15-Minute Binary Contracts</div>
+      <div class="rlog-meta">BTC Up/Down prediction markets — mathematically unviable spread</div>
+
+      <div class="rblock">
+        <div class="rblock-label">Research</div>
+        <p>Pivoted from BTC 4H after finding it too noisy — binary "Up or Down" contracts on
+          Polymarket offered a mathematically clean label (close[t+15] &gt; close[t]) with zero
+          liquidation risk and 0% execution fees.</p>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Training</div>
+        <p>LightGBM for probability prediction + Random Forest meta-labeling, thresholding entries
+          against Polymarket's own share pricing.</p>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Live Diagnosis — the market itself was the problem</div>
+        <p>Diagnostic scanners (<span class="mono">poly_scanner.py</span>, <span class="mono">top_markets.py</span>)
+          revealed the target market's real CLOB orderbook, not the aggregated web UI figure.</p>
+      </div>
+      <div class="metric-strip">
+        <div class="metric-strip-item"><div class="v" style="color:var(--hv)">$0.98</div><div class="l">Bid-ask spread on target market</div></div>
+        <div class="metric-strip-item"><div class="v" style="color:var(--hv)">&gt;99.1%</div><div class="l">Win-rate required to break even</div></div>
+      </div>
+      <div class="rblock">
+        <p>Risking $0.99 to gain $0.01 requires a &gt;99.1% win-rate — unviable regardless of
+          predictive edge. Pivoted to Statistical Arbitrage.</p>
+      </div>
+    </div>
+
+    <!-- ═══ ENTRY: BTC 4H ═══ -->
+    <div class="rlog-entry">
+      <span class="rlog-dot" style="background:var(--dim-2)"></span>
+      <span class="rlog-status" style="border-color:var(--dim-2);color:var(--dim-2)">◐ PIVOTED — ORIGIN</span>
+      <div class="rlog-title">BTC/USDT 4H Directional Swing Trading</div>
+      <div class="rlog-meta">Where it started — XGBoost + meta-labeling on 4H BTC</div>
+
+      <div class="rblock">
+        <div class="rblock-label">Research → Data → Features</div>
+        <p>Directional prediction on BTC 4H, predicting T+24H. OHLCV + Funding Rate + Fear &amp; Greed
+          Index + macro (DXY, equities via yfinance). 9 raw inputs engineered into 15 stationary
+          predictors.</p>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Training</div>
+        <p><strong>Phase 1:</strong> XGBoost (outperformed LightGBM in purged CV) for direction.
+          <strong>Phase 2:</strong> Random Forest meta-labeling, Triple Barrier (PT 1.5×vol,
+          SL 1.0×vol, 24h limit).</p>
+      </div>
+      <div class="metric-strip">
+        <div class="metric-strip-item"><div class="v" style="color:var(--hv)">33.25%</div><div class="l">Primary model win-rate</div></div>
+        <div class="metric-strip-item"><div class="v" style="color:var(--mr)">55.14%</div><div class="l">Meta-model precision</div></div>
+        <div class="metric-strip-item"><div class="v">&gt;40.0%</div><div class="l">Break-even precision needed</div></div>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Backtest</div>
+        <p>Despite the meta-model clearing break-even precision on paper, the combined system did
+          not produce a positive net return once simulated — the 4H timeframe carried too much
+          intrabar noise for the edge to survive execution. Pivoted to Polymarket's cleaner
+          binary-outcome structure.</p>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+</div><!-- /wrap -->
+
+<footer>
+  <p>Paper trading on Binance Demo Trading — no real capital at risk. Not financial advice.</p>
+</footer>
 
 <script>
-function switchTab(id, btn) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tabs > .tab').forEach(t => t.classList.remove('active'));
-    document.getElementById('tab-' + id).classList.add('active');
-    btn.classList.add('active');
+function nav(id, btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.navtab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
 }
 
-function switchSubTab(id, btn) {
-    document.querySelectorAll('.subtab-content').forEach(t => t.classList.remove('active'));
-    btn.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.getElementById('subtab-' + id).classList.add('active');
-    btn.classList.add('active');
+Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+
+function makeEquityChart(canvasId, labels, values){
+  const el = document.getElementById(canvasId);
+  if(!el || values.length===0) return;
+  const start=values[0], end=values[values.length-1];
+  const color = end>=start ? '#2dd4a7' : '#ef5354';
+  new Chart(el, {
+    type:'line',
+    data:{labels, datasets:[{data:values, borderColor:color, backgroundColor:color+'12',
+      borderWidth:1.6, pointRadius:0, fill:true, tension:.3}]},
+    options:{responsive:true,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>`$${c.parsed.y.toFixed(2)}`}}},
+      scales:{
+        x:{ticks:{color:'#5b6472',maxTicksLimit:7,maxRotation:0,font:{size:10}},grid:{color:'#1a2028'}},
+        y:{ticks:{color:'#8a94a6',callback:v=>`$${v.toFixed(2)}`,font:{size:10}},grid:{color:'#1a2028'}}
+      },
+      interaction:{intersect:false,mode:'index'}
+    }
+  });
 }
+makeEquityChart('statarbChart', {{ statarb.chart_labels | tojson }}, {{ statarb.chart_values | tojson }});
+makeEquityChart('fundingChart', {{ funding.chart_labels | tojson }}, {{ funding.chart_values | tojson }});
 
-function makeEquityChart(canvasId, labels, values, chartLabel) {
-    const el = document.getElementById(canvasId);
-    if (!el || values.length === 0) return;
-    const start = values[0], end = values[values.length - 1];
-    const color = end >= start ? '#34d399' : '#f87171';
-    new Chart(el, {
-        type: 'line',
-        data: { labels, datasets: [{ label: chartLabel, data: values, borderColor: color,
-            backgroundColor: color + '15', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.3 }] },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `$${c.parsed.y.toFixed(2)}` } } },
-            scales: {
-                x: { ticks: { color: '#475569', maxTicksLimit: 8, maxRotation: 0 }, grid: { color: '#1a1a35' } },
-                y: { ticks: { color: '#64748b', callback: v => `$${v.toFixed(2)}` }, grid: { color: '#1a1a35' } }
-            },
-            interaction: { intersect: false, mode: 'index' }
-        }
-    });
-}
-
-// StatArb chart
-makeEquityChart('statarbChart',
-    {{ statarb.chart_labels | tojson }},
-    {{ statarb.chart_values | tojson }},
-    'Capital StatArb (USDT)'
-);
-
-// Funding chart
-makeEquityChart('fundingChart',
-    {{ funding.chart_labels | tojson }},
-    {{ funding.chart_values | tojson }},
-    'Capital Funding Carry (USDT)'
-);
+// Signature sparkline — Hurst exponent with regime threshold bands
+(function(){
+  const vals = {{ hurst_sparkline | tojson }};
+  const el = document.getElementById('sparkline');
+  if(!el) return;
+  if(vals.length < 2){ el.parentElement.style.opacity = .3; return; }
+  new Chart(el, {
+    type:'line',
+    data:{labels: vals.map((_,i)=>i), datasets:[
+      {data: vals, borderColor:'#ffb020', borderWidth:1.3, pointRadius:0, tension:.35, fill:false},
+      {data: vals.map(()=>0.43), borderColor:'#2dd4a733', borderWidth:1, pointRadius:0, borderDash:[3,3]},
+      {data: vals.map(()=>0.47), borderColor:'#f2994a33', borderWidth:1, pointRadius:0, borderDash:[3,3]},
+    ]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{enabled:false}},
+      scales:{x:{display:false}, y:{display:false, min:0.15, max:0.75}},
+      elements:{line:{capBezierPoints:true}},
+      animation:false
+    }
+  });
+})();
 </script>
 </body>
 </html>
