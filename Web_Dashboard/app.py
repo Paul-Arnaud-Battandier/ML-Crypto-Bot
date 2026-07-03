@@ -120,14 +120,6 @@ def index():
     regime_data = sb_get('regime_history', 'order=id.desc&limit=1')
     regime = regime_data[0] if regime_data else None
 
-    # ── Sparkline signature (dernières valeurs Hurst, ordre chronologique) ──
-    regime_history_raw = sb_get('regime_history', 'order=id.desc&limit=40')
-    regime_history_raw = list(reversed(regime_history_raw))
-    hurst_sparkline = [
-        r.get('eth_hurst') for r in regime_history_raw
-        if r.get('eth_hurst') is not None
-    ]
-
     # ── Résumé global (somme des deux stratégies) ─────────────
     global_capital = (statarb['current'].get('equity_usdt') or 0) + \
                       (funding['current'].get('equity_usdt') or 0)
@@ -137,7 +129,6 @@ def index():
         statarb=statarb,
         funding=funding,
         global_capital=global_capital,
-        hurst_sparkline=hurst_sparkline,
         last_update=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     )
 

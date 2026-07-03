@@ -32,16 +32,11 @@ a{color:inherit}
 .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
 
 /* ═══════════════════ STATUS BAR (signature) ═══════════════════ */
-.statusbar{position:sticky;top:0;z-index:50;background:rgba(10,13,18,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-.statusbar-inner{max-width:1180px;margin:0 auto;padding:10px 24px;display:flex;align-items:center;gap:18px}
-.livedot{width:7px;height:7px;border-radius:50%;background:var(--mr);flex-shrink:0;animation:pulse 2.2s infinite}
-@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 var(--mr-dim)}50%{opacity:.5}}
-.livelabel{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;white-space:nowrap}
-.regime-chip{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;padding:3px 10px;border-radius:3px;white-space:nowrap;font-weight:500}
-.spark-wrap{flex:1;min-width:0;height:28px;position:relative;display:flex;align-items:center}
-.spark-label{font-family:var(--font-mono);font-size:9.5px;color:var(--dim-2);letter-spacing:.1em;margin-right:10px;white-space:nowrap;display:none}
-@media(min-width:820px){.spark-label{display:block}}
-.statusbar-time{font-family:var(--font-mono);font-size:10.5px;color:var(--dim-2);white-space:nowrap;flex-shrink:0}
+.statusbar{background:var(--bg);border-bottom:1px solid var(--line)}
+.statusbar-inner{max-width:1180px;margin:0 auto;padding:8px 24px;display:flex;align-items:center}
+.live-pill{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mr);display:inline-flex;align-items:center;gap:7px;padding:4px 12px;border:1px solid var(--mr);border-radius:20px;background:var(--mr-dim)}
+.livedot{width:6px;height:6px;border-radius:50%;background:var(--mr);flex-shrink:0;animation:pulse 2.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* ═══════════════════ NAV ═══════════════════ */
 .topnav{border-bottom:1px solid var(--line)}
@@ -157,19 +152,10 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
 </head>
 <body>
 
-<!-- ═══════════ STATUS BAR — signature sparkline ═══════════ -->
+<!-- ═══════════ STATUS BAR ═══════════ -->
 <div class="statusbar">
-  <div class="statusbar-inner">
-    <span class="livedot"></span>
-    <span class="livelabel">Live</span>
-    {% if regime %}
-    <span class="regime-chip bg-{{ regime.regime }}" style="color:var(--{% if regime.regime=='MEAN_REV' %}mr{% elif regime.regime=='TRENDING' %}tr{% elif regime.regime=='HIGH_VOL' %}hv{% else %}nt{% endif %})">{{ regime.regime }}</span>
-    {% endif %}
-    <div class="spark-wrap">
-      <span class="spark-label">ETH HURST · 40 CYCLES</span>
-      <canvas id="sparkline" height="28"></canvas>
-    </div>
-    <span class="statusbar-time">{{ last_update }} UTC+0</span>
+  <div class="statusbar-inner" style="justify-content:flex-end">
+    <span class="live-pill"><span class="livedot"></span> Live</span>
   </div>
 </div>
 
@@ -177,13 +163,13 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
 <div class="topnav">
   <div class="topnav-inner">
     <div>
-      <div class="brand">Paul Arnaud-Battandier<span>.</span></div>
+      <div class="brand">Algo Trading Bot</div>
       <div class="brand-sub">Quant Research Terminal — Market-Neutral Crypto Systems</div>
     </div>
     <div class="navtabs">
-      <button class="navtab active" onclick="nav('about',this)">About</button>
-      <button class="navtab" onclick="nav('dashboard',this)">Dashboard</button>
+      <button class="navtab active" onclick="nav('dashboard',this)">Dashboard</button>
       <button class="navtab" onclick="nav('research',this)">Research</button>
+      <button class="navtab" onclick="nav('about',this)">About me</button>
     </div>
   </div>
 </div>
@@ -193,46 +179,38 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
 <!-- ═══════════════════════════════════════════════════════════ -->
 <!-- PAGE: ABOUT -->
 <!-- ═══════════════════════════════════════════════════════════ -->
-<div id="page-about" class="page active">
+<div id="page-about" class="page">
 
   <div class="hero-about">
     <div class="avatar">PAB</div>
     <div>
-      <h1>Building systems that trade<br>without needing to be right<br>about direction.</h1>
+      <h1 style="font-size:26px">Paul Arnaud-Battandier</h1>
+      <p style="color:var(--dim);font-size:14.5px;margin-top:6px">Major in Finance &amp; Quantitative Engineering · ECE Paris</p>
+      <p style="color:var(--amber);font-size:14px;margin-top:8px;font-weight:500">Seeking an end-of-studies internship · Jan/Feb 2027 · Trading or Quantitative Research</p>
       <div class="about-links">
-        <a class="link-btn primary" href="/static/CV_Paul_Arnaud-Battandier.pdf" target="_blank">↓ Download CV</a>
         <a class="link-btn" href="https://www.linkedin.com/in/paul-arnaud-battandier/" target="_blank">LinkedIn</a>
         <a class="link-btn" href="https://github.com/Paul-Arnaud-Battandier" target="_blank">GitHub</a>
+        <a class="link-btn primary" href="/static/CV_Paul_Arnaud-Battandier.pdf" target="_blank">↓ Download CV</a>
       </div>
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:40px">
-    <div class="eyebrow">Currently</div>
-    <p style="color:var(--dim);font-size:14.5px;max-width:700px">
-      Finance &amp; Quantitative Engineering student at ECE Paris, seeking an end-of-studies
-      internship <strong style="color:var(--ink)">(Jan/Feb 2027)</strong> in trading or quantitative research.
-      This site is the live output of that preparation — a regime-switching, market-neutral
-      trading system running continuously on paper capital, documented end to end.
-    </p>
+  <div class="about-section">
+    <h3>About my personality</h3>
+    <p>I am highly analytical, pragmatic, and driven by complex problem-solving. I thrive at
+      the intersection of mathematics, computer science, and financial markets. I believe in
+      building robust, data-driven systems without "black box" illusions, always focusing on
+      statistical edge, strict risk management, and clean architecture.</p>
   </div>
 
   <div class="about-section">
-    <h3>Working style</h3>
-    <p>Analytical and pragmatic — drawn to the intersection of mathematics, software, and
-      market microstructure. I build systems that fail loudly and cheaply in research before
-      they're ever allowed near live capital, paper or real. No black boxes: every strategy
-      on this site is accompanied by the reasoning, the failed attempts, and the fee math
-      that decided whether it shipped.</p>
-  </div>
-
-  <div class="about-section">
-    <h3>Technical core</h3>
-    <p>Python-first (pandas, statsmodels, scikit-learn, LightGBM), with a working foundation
-      in Lopez de Prado's applied ML framework — Triple Barrier labeling, meta-labeling,
-      purged cross-validation. Comfortable across the full pipeline: exchange APIs,
-      statistical validation, model training, live deployment, and the infrastructure
-      (Supabase, Render, background job orchestration) that keeps it running unattended.</p>
+    <h3>My core skills</h3>
+    <p>My technical stack is centered around Quantitative Finance and Machine Learning. I
+      specialize in Python (Pandas, NumPy, Scikit-Learn) and predictive modeling (LightGBM,
+      Random Forest, XGBoost). I am heavily influenced by Marcos Lopez de Prado's framework
+      for <em>Advances in Financial Machine Learning</em> (Purged CV, fractional differentiation,
+      meta-labeling). Beyond research, I build end-to-end pipelines: from API integrations to
+      live cloud deployments.</p>
     <div class="skill-tags">
       <span class="skill-tag">Python</span><span class="skill-tag">pandas / numpy</span>
       <span class="skill-tag">statsmodels</span><span class="skill-tag">LightGBM</span>
@@ -243,11 +221,11 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
   </div>
 
   <div class="about-section">
-    <h3>What I'm looking for</h3>
-    <p>A seat on a proprietary trading, hedge fund, or quantitative research desk where I can
-      contribute to alpha research or execution systems alongside people who'll push my
-      standards higher. Long-term, I want to be the person in the room who's checked the
-      fee math before anyone asks.</p>
+    <h3>My ambitions</h3>
+    <p>My immediate goal is to secure an end-of-studies internship in a fast-paced proprietary
+      trading firm, hedge fund, or quantitative research desk. I want to surround myself with
+      industry experts, contribute to alpha generation or execution optimization, and ultimately
+      evolve into a top-tier Quantitative Researcher or Algorithmic Trader.</p>
   </div>
 
 </div>
@@ -255,7 +233,7 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
 <!-- ═══════════════════════════════════════════════════════════ -->
 <!-- PAGE: DASHBOARD -->
 <!-- ═══════════════════════════════════════════════════════════ -->
-<div id="page-dashboard" class="page">
+<div id="page-dashboard" class="page active">
 
   <div class="eyebrow">Live — Binance Demo Trading</div>
   <h1 style="font-size:28px;margin-bottom:6px">Portfolio Overview</h1>
@@ -461,12 +439,6 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
   </div>
 
   <div class="disclaimer">Paper trading only — no real funds involved. Universe filtered on 30d APR &gt; 4%, positive-payment consistency &gt; 60%, checked every 8h at Binance funding timestamps. Exit on rolling 5-payment average turning negative or 45-day time limit.</div>
-
-  <!-- Screenshot placeholder slot -->
-  <div class="shot">
-    <img src="/static/screenshots/binance_position.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-    <div style="display:none">SCREENSHOT SLOT — drop binance_position.png in Web_Dashboard/static/screenshots/</div>
-  </div>
 
 </div>
 
@@ -675,27 +647,62 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
 
       <div class="rblock">
         <div class="rblock-label">Research</div>
-        <p>Pivoted from BTC 4H after finding it too noisy — binary "Up or Down" contracts on
-          Polymarket offered a mathematically clean label (close[t+15] &gt; close[t]) with zero
-          liquidation risk and 0% execution fees.</p>
+        <p>Pivoted from BTC 4H after finding it too noisy — Polymarket's binary "Up or Down"
+          contracts offered a mathematically clean label (<span class="mono">close[t+15] &gt; close[t]</span>),
+          $1.00/$0.00 settlement, zero liquidation risk, and 0% execution fees. Traded on the
+          Polygon network as a prediction market rather than a leveraged derivative.</p>
+        <ul style="margin-top:10px">
+          <li><strong>Trading Horizon:</strong> ultra-short term (15m) to intraday, daily close 4PM ET.</li>
+          <li><strong>Underlying Driver:</strong> mathematical probability of short-term directional movement.</li>
+          <li><strong>Primary Quantitative Risks identified upfront:</strong> phantom liquidity,
+            API architecture constraints (Event ID vs Market ID), microstructure risk from
+            empty L2 orderbooks on directional algorithms.</li>
+        </ul>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Data</div>
+        <ul>
+          <li><strong>Market Data:</strong> Polymarket Gamma API (metadata, market status,
+            aggregated "web liquidity") + CLOB API (L2 orderbook depth, Best Bid/Offer).</li>
+          <li><strong>Execution Data:</strong> spread endpoint, L1 imbalance (top-of-book volume).</li>
+          <li><strong>Underlying Data:</strong> real-time BTC prices for ML inference.</li>
+        </ul>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Features</div>
+        <p>Short-term OHLCV (1m/15m) engineered into high-frequency momentum and volatility
+          contraction predictors.</p>
       </div>
       <div class="rblock">
         <div class="rblock-label">Training</div>
-        <p>LightGBM for probability prediction + Random Forest meta-labeling, thresholding entries
-          against Polymarket's own share pricing.</p>
+        <p><strong>Phase 1 — Probability Prediction:</strong> LightGBM optimized for binary
+          classification, 15m horizon to next daily close.<br>
+          <strong>Phase 2 — Confidence Thresholding:</strong> Random Forest meta-labeling,
+          dynamically thresholding entries against Polymarket's own live share price
+          (execute only if model confidence &gt; market ask price).</p>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Deployment</div>
+        <p>Diagnostic scanners (<span class="mono">poly_scanner.py</span>,
+          <span class="mono">top_markets.py</span>) deployed to scan the CLOB API in real time
+          ahead of full live deployment.</p>
       </div>
       <div class="rblock">
         <div class="rblock-label">Live Diagnosis — the market itself was the problem</div>
-        <p>Diagnostic scanners (<span class="mono">poly_scanner.py</span>, <span class="mono">top_markets.py</span>)
-          revealed the target market's real CLOB orderbook, not the aggregated web UI figure.</p>
+        <p><strong>Finding 1:</strong> discrepancy between the Web UI's aggregated liquidity figure
+          and the actual CLOB API orderbook. <strong>Finding 2:</strong> lack of institutional
+          market makers on pure short-term directional contracts.</p>
       </div>
       <div class="metric-strip">
-        <div class="metric-strip-item"><div class="v" style="color:var(--hv)">$0.98</div><div class="l">Bid-ask spread on target market</div></div>
+        <div class="metric-strip-item"><div class="v" style="color:var(--hv)">$0.98</div><div class="l">Spread on target market (Bid $0.01 / Ask $0.99)</div></div>
         <div class="metric-strip-item"><div class="v" style="color:var(--hv)">&gt;99.1%</div><div class="l">Win-rate required to break even</div></div>
       </div>
       <div class="rblock">
-        <p>Risking $0.99 to gain $0.01 requires a &gt;99.1% win-rate — unviable regardless of
-          predictive edge. Pivoted to Statistical Arbitrage.</p>
+        <p>Mathematical expectancy deeply negative: risking $0.99 to gain $0.01 requires a
+          &gt;99.1% win-rate — unviable <strong>despite a genuine predictive edge</strong>. The
+          model itself was not the failure point; the market's execution structure was.
+          Pivoted to Statistical Arbitrage on Binance Futures, where spreads are a
+          negligible fraction of position size.</p>
       </div>
     </div>
 
@@ -707,28 +714,57 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
       <div class="rlog-meta">Where it started — XGBoost + meta-labeling on 4H BTC</div>
 
       <div class="rblock">
-        <div class="rblock-label">Research → Data → Features</div>
-        <p>Directional prediction on BTC 4H, predicting T+24H. OHLCV + Funding Rate + Fear &amp; Greed
-          Index + macro (DXY, equities via yfinance). 9 raw inputs engineered into 15 stationary
-          predictors.</p>
+        <div class="rblock-label">Research</div>
+        <ul>
+          <li><strong>Market Characteristics:</strong> 24/7/365 trading environment, heavily
+            retail-driven, distinct cyclical regimes.</li>
+          <li><strong>Trading Horizon:</strong> swing trading.</li>
+          <li><strong>Underlying Drivers:</strong> funding rates, on-chain flows, macroeconomic
+            cyclicality.</li>
+          <li><strong>Execution &amp; Capital:</strong> €100 initial budget, forward-tested via
+            Binance Testnet.</li>
+          <li><strong>Primary Quantitative Risks:</strong> look-ahead bias, overfitting
+            (curve-fitting) — flagged before any model was trained.</li>
+        </ul>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Data</div>
+        <ul>
+          <li><strong>Market Data:</strong> OHLCV.</li>
+          <li><strong>Alternative Data:</strong> Funding Rate, Fear &amp; Greed Index.</li>
+          <li><strong>Macroeconomic Data:</strong> DXY (US Dollar), equities (via yfinance).</li>
+          <li><strong>Excluded:</strong> Open Interest — historical data unavailable at the
+            required granularity.</li>
+        </ul>
+      </div>
+      <div class="rblock">
+        <div class="rblock-label">Features</div>
+        <p>9 raw inputs engineered into 15 quantitative predictors: stationary transformations,
+          volatility metrics, relative distances.</p>
       </div>
       <div class="rblock">
         <div class="rblock-label">Training</div>
-        <p><strong>Phase 1:</strong> XGBoost (outperformed LightGBM in purged CV) for direction.
-          <strong>Phase 2:</strong> Random Forest meta-labeling, Triple Barrier (PT 1.5×vol,
-          SL 1.0×vol, 24h limit).</p>
+        <p><strong>Phase 1 — Primary Model (Directional):</strong> 4H timeframe predicting T+24H
+          (rolling window for time diversification). XGBoost selected over LightGBM after purged
+          cross-validation. Hyperparameters tuned via Optuna (TPE algorithm, Median Pruner).<br><br>
+          <strong>Phase 2 — Meta-Labeling:</strong> Random Forest Classifier
+          (n_estimators=200, max_depth=5, class_weight='balanced'). Triple Barrier setup:
+          PT = 1.5× volatility, SL = 1.0× volatility, Time Limit = 24h. Break-even
+          (1.5:1 R/R) required &gt;40.0% precision.</p>
       </div>
       <div class="metric-strip">
-        <div class="metric-strip-item"><div class="v" style="color:var(--hv)">33.25%</div><div class="l">Primary model win-rate</div></div>
-        <div class="metric-strip-item"><div class="v" style="color:var(--mr)">55.14%</div><div class="l">Meta-model precision</div></div>
-        <div class="metric-strip-item"><div class="v">&gt;40.0%</div><div class="l">Break-even precision needed</div></div>
+        <div class="metric-strip-item"><div class="v" style="color:var(--hv)">33.25%</div><div class="l">Primary model win-rate (unprofitable alone)</div></div>
+        <div class="metric-strip-item"><div class="v" style="color:var(--mr)">55.14%</div><div class="l">Meta-model precision @ 54% confidence</div></div>
+        <div class="metric-strip-item"><div class="v">+$37.5</div><div class="l">Expectancy per trade ($100 risk)</div></div>
       </div>
       <div class="rblock">
         <div class="rblock-label">Backtest</div>
-        <p>Despite the meta-model clearing break-even precision on paper, the combined system did
-          not produce a positive net return once simulated — the 4H timeframe carried too much
-          intrabar noise for the edge to survive execution. Pivoted to Polymarket's cleaner
-          binary-outcome structure.</p>
+        <p>The meta-model cleared break-even precision and showed positive expectancy in isolation,
+          with position sizing dynamically allocated from the model's output probability. Despite
+          this, the combined system did not produce a positive net return once fully simulated —
+          the 4H timeframe carried too much intrabar noise and "random walk" character for the
+          statistical edge to survive realistic execution at this capital scale. Pivoted to
+          Polymarket's cleaner binary-outcome structure.</p>
       </div>
     </div>
 
@@ -737,6 +773,7 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
 </div>
 
 </div><!-- /wrap -->
+
 
 <footer>
   <p>Paper trading on Binance Demo Trading — no real capital at risk. Not financial advice.</p>
@@ -773,28 +810,6 @@ function makeEquityChart(canvasId, labels, values){
 }
 makeEquityChart('statarbChart', {{ statarb.chart_labels | tojson }}, {{ statarb.chart_values | tojson }});
 makeEquityChart('fundingChart', {{ funding.chart_labels | tojson }}, {{ funding.chart_values | tojson }});
-
-// Signature sparkline — Hurst exponent with regime threshold bands
-(function(){
-  const vals = {{ hurst_sparkline | tojson }};
-  const el = document.getElementById('sparkline');
-  if(!el) return;
-  if(vals.length < 2){ el.parentElement.style.opacity = .3; return; }
-  new Chart(el, {
-    type:'line',
-    data:{labels: vals.map((_,i)=>i), datasets:[
-      {data: vals, borderColor:'#ffb020', borderWidth:1.3, pointRadius:0, tension:.35, fill:false},
-      {data: vals.map(()=>0.43), borderColor:'#2dd4a733', borderWidth:1, pointRadius:0, borderDash:[3,3]},
-      {data: vals.map(()=>0.47), borderColor:'#f2994a33', borderWidth:1, pointRadius:0, borderDash:[3,3]},
-    ]},
-    options:{responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}, tooltip:{enabled:false}},
-      scales:{x:{display:false}, y:{display:false, min:0.15, max:0.75}},
-      elements:{line:{capBezierPoints:true}},
-      animation:false
-    }
-  });
-})();
 </script>
 </body>
 </html>

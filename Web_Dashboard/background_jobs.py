@@ -14,6 +14,7 @@ import sys
 import time
 import random
 import threading
+import gc
 from pathlib import Path
 from datetime import datetime
 
@@ -46,6 +47,7 @@ def regime_loop():
         try:
             get_current_regime(verbose=True)
             last_run = datetime.now()
+            gc.collect()
             return True
         except Exception as e:
             print(f"[BG] ⚠️ Erreur calcul régime : {e}")
@@ -71,14 +73,38 @@ def regime_loop():
             time.sleep(300)
 
 
+def statarb_rescan_loop():
+    """Relance le scan de cointégration (11 paires candidates) toutes les 7
+    jours (thread séparé, tourne en parallèle du bot de trading StatArb)."""
+    from select_pair import get_best_pair  # type: ignore
+
+    while True:
+        try:
+            get_best_pair(verbose=True)
+        except Exception as e:
+            print(f"[BG] ⚠️ Erreur rescan StatArb pair : {e}")
+        time.sleep(7 * 24 * 3600)  # 7 jours
+
+
 def trading_loop():
-    """Lance live_bot.py en continu, avec backoff exponentiel si crash."""
+    """Lance select_pair.py (scan initial + rescan hebdo en thread interne)
+    puis live_bot.py en continu, avec backoff exponentiel si crash."""
+    from select_pair import get_best_pair  # type: ignore
     from live_bot import main as bot_main  # type: ignore
 
     # Démarre en 2ème — décalé pour ne pas cumuler avec regime_loop
     time.sleep(random.uniform(30, 45))
 
     print("[BG] 🤖 Trading loop démarré")
+
+    try:
+        get_best_pair(verbose=True)
+    except Exception as e:
+        print(f"[BG] ⚠️ Erreur scan StatArb pair initial : {e}")
+
+    # Thread interne pour le rescan hebdomadaire (indépendant du bot bloquant)
+    threading.Thread(target=statarb_rescan_loop, daemon=True, name="statarb_rescan_thread").start()
+
     backoff = 30  # secondes, double à chaque crash, plafonné à 10min
 
     while True:
@@ -136,8 +162,13 @@ def funding_loop():
 
 
 def start_background_jobs():
-    """Démarre les trois boucles en threads daemon (non-bloquant)."""
+    """Démarre les trois boucles principales en threads daemon (non-bloquant).
+    Chacune lance elle-même un thread de rescan interne pour rester à jour :
+      - regime_loop    : recalcul horaire
+      - trading_loop    : bot StatArb + rescan de paire hebdomadaire
+      - funding_loop    : bot Funding Carry + rescan de paire quotidien
+    """
     threading.Thread(target=regime_loop,  daemon=True, name="regime_thread").start()
     threading.Thread(target=trading_loop, daemon=True, name="trading_thread").start()
     threading.Thread(target=funding_loop, daemon=True, name="funding_thread").start()
-    print("[BG] ✅ Threads de fond lancés (régime + statarb + funding)")
+    print("[BG] ✅ Threads de fond lancés (régime + statarb[+rescan 7j] + funding[+rescan 24h])")

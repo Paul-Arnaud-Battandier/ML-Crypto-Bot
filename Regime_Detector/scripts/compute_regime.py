@@ -25,7 +25,6 @@ import numpy as np
 import json
 from datetime import datetime
 from pathlib import Path
-import os
 
 # ── Chemins ───────────────────────────────────────────────────
 ROOT_DIR    = Path(__file__).parent.parent
@@ -62,9 +61,13 @@ REGIME_EMOJI = {
 }
 
 # ── Fetch ─────────────────────────────────────────────────────
+# ── Fetch ─────────────────────────────────────────────────────
+# Instance unique réutilisée — en créer une nouvelle à chaque appel
+# accumule des connexions HTTP non fermées (fuite mémoire lente).
+_exchange = ccxt.binance({'enableRateLimit': True})
+
 def fetch_ohlcv(symbol, limit=150):
-    exchange = ccxt.binance({'enableRateLimit': True})
-    ohlcv = exchange.fetch_ohlcv(symbol, '1h', limit=limit)
+    ohlcv = _exchange.fetch_ohlcv(symbol, '1h', limit=limit)
     df = pd.DataFrame(ohlcv, columns=['timestamp','open','high','low','close','volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df = df.set_index('timestamp')
