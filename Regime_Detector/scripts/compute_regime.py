@@ -20,6 +20,7 @@ import ccxt
 import requests as _requests
 from dotenv import load_dotenv
 load_dotenv()
+import os
 import pandas as pd
 import numpy as np
 import json

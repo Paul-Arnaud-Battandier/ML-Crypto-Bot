@@ -32,20 +32,22 @@ a{color:inherit}
 .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
 
 /* ═══════════════════ STATUS BAR (signature) ═══════════════════ */
-.statusbar{background:var(--bg);border-bottom:1px solid var(--line)}
-.statusbar-inner{max-width:1180px;margin:0 auto;padding:8px 24px;display:flex;align-items:center}
 .live-pill{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mr);display:inline-flex;align-items:center;gap:7px;padding:4px 12px;border:1px solid var(--mr);border-radius:20px;background:var(--mr-dim)}
 .livedot{width:6px;height:6px;border-radius:50%;background:var(--mr);flex-shrink:0;animation:pulse 2.2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* ═══════════════════ NAV ═══════════════════ */
-.topnav{border-bottom:1px solid var(--line)}
-.topnav-inner{max-width:1180px;margin:0 auto;padding:20px 24px 0 24px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px}
+.topnav{background:var(--bg)}
+.topnav-inner{max-width:1180px;margin:0 auto;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px}
 .brand{font-family:var(--font-display);font-weight:700;font-size:19px;letter-spacing:-.01em}
 .brand span{color:var(--amber)}
 .brand-sub{font-family:var(--font-mono);font-size:11px;color:var(--dim);margin-top:3px;letter-spacing:.02em}
-.navtabs{display:flex;gap:2px;margin-top:14px}
-.navtab{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:11px 18px;color:var(--dim);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;transition:color .15s}
+.live-pill{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mr);display:inline-flex;align-items:center;gap:7px;padding:4px 12px;border:1px solid var(--mr);border-radius:20px;background:var(--mr-dim);white-space:nowrap}
+.livedot{width:6px;height:6px;border-radius:50%;background:var(--mr);flex-shrink:0;animation:pulse 2.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.navtabs-row{border-bottom:1px solid var(--line)}
+.navtabs{max-width:1180px;margin:0 auto;padding:0 24px;display:flex;gap:2px;justify-content:center}
+.navtab{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:11px 22px;color:var(--dim);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;transition:color .15s}
 .navtab:hover{color:var(--ink)}
 .navtab.active{color:var(--amber);border-bottom-color:var(--amber)}
 .page{display:none;padding:40px 0 80px 0}
@@ -146,26 +148,21 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
 @media(max-width:600px){
   .wrap{padding:0 16px}
   .topnav-inner{padding:16px 16px 0 16px}
-  .statusbar-inner{padding:8px 16px}
 }
 </style>
 </head>
 <body>
 
-<!-- ═══════════ STATUS BAR ═══════════ -->
-<div class="statusbar">
-  <div class="statusbar-inner" style="justify-content:flex-end">
-    <span class="live-pill"><span class="livedot"></span> Live</span>
-  </div>
-</div>
-
-<!-- ═══════════ NAV ═══════════ -->
+<!-- ═══════════ HEADER ═══════════ -->
 <div class="topnav">
   <div class="topnav-inner">
     <div>
       <div class="brand">Algo Trading Bot</div>
       <div class="brand-sub">Quant Research Terminal — Market-Neutral Crypto Systems</div>
     </div>
+    <span class="live-pill"><span class="livedot"></span> Live</span>
+  </div>
+  <div class="navtabs-row">
     <div class="navtabs">
       <button class="navtab active" onclick="nav('dashboard',this)">Dashboard</button>
       <button class="navtab" onclick="nav('research',this)">Research</button>
@@ -181,23 +178,20 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-about" class="page">
 
-  <div class="hero-about">
-    <div class="avatar">PAB</div>
-    <div>
-      <h1 style="font-size:26px">Paul Arnaud-Battandier</h1>
-      <p style="color:var(--dim);font-size:14.5px;margin-top:6px">Major in Finance &amp; Quantitative Engineering · ECE Paris</p>
-      <p style="color:var(--amber);font-size:14px;margin-top:8px;font-weight:500">Seeking an end-of-studies internship · Jan/Feb 2027 · Trading or Quantitative Research</p>
-      <div class="about-links">
-        <a class="link-btn" href="https://www.linkedin.com/in/paul-arnaud-battandier/" target="_blank">LinkedIn</a>
-        <a class="link-btn" href="https://github.com/Paul-Arnaud-Battandier" target="_blank">GitHub</a>
-        <a class="link-btn primary" href="/static/CV_Paul_Arnaud-Battandier.pdf" target="_blank">↓ Download CV</a>
-      </div>
+  <div style="margin-bottom:36px">
+    <h1 style="font-size:26px">Paul Arnaud-Battandier</h1>
+    <p style="color:var(--dim);font-size:14.5px;margin-top:6px">Major in Finance &amp; Quantitative Engineering · ECE Paris</p>
+    <p style="color:var(--amber);font-size:14px;margin-top:8px;font-weight:500">Seeking an end-of-studies internship · Jan/Feb 2027 · Trading or Quantitative Research</p>
+    <div class="about-links">
+      <a class="link-btn" href="https://www.linkedin.com/in/paul-arnaud-battandier/" target="_blank">LinkedIn</a>
+      <a class="link-btn" href="https://github.com/Paul-Arnaud-Battandier" target="_blank">GitHub</a>
+      <a class="link-btn primary" href="/static/CV_Paul_Arnaud-Battandier.pdf" target="_blank">↓ Download CV</a>
     </div>
   </div>
 
   <div class="about-section">
     <h3>About my personality</h3>
-    <p>I am highly analytical, pragmatic, and driven by complex problem-solving. I thrive at
+    <p style="max-width:none">I am highly analytical, pragmatic, and driven by complex problem-solving. I thrive at
       the intersection of mathematics, computer science, and financial markets. I believe in
       building robust, data-driven systems without "black box" illusions, always focusing on
       statistical edge, strict risk management, and clean architecture.</p>
@@ -205,24 +199,17 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
 
   <div class="about-section">
     <h3>My core skills</h3>
-    <p>My technical stack is centered around Quantitative Finance and Machine Learning. I
+    <p style="max-width:none">My technical stack is centered around Quantitative Finance and Machine Learning. I
       specialize in Python (Pandas, NumPy, Scikit-Learn) and predictive modeling (LightGBM,
       Random Forest, XGBoost). I am heavily influenced by Marcos Lopez de Prado's framework
       for <em>Advances in Financial Machine Learning</em> (Purged CV, fractional differentiation,
       meta-labeling). Beyond research, I build end-to-end pipelines: from API integrations to
       live cloud deployments.</p>
-    <div class="skill-tags">
-      <span class="skill-tag">Python</span><span class="skill-tag">pandas / numpy</span>
-      <span class="skill-tag">statsmodels</span><span class="skill-tag">LightGBM</span>
-      <span class="skill-tag">scikit-learn</span><span class="skill-tag">ccxt</span>
-      <span class="skill-tag">Cointegration</span><span class="skill-tag">Meta-Labeling</span>
-      <span class="skill-tag">Flask</span><span class="skill-tag">PostgreSQL</span>
-    </div>
   </div>
 
   <div class="about-section">
     <h3>My ambitions</h3>
-    <p>My immediate goal is to secure an end-of-studies internship in a fast-paced proprietary
+    <p style="max-width:none">My immediate goal is to secure an end-of-studies internship in a fast-paced proprietary
       trading firm, hedge fund, or quantitative research desk. I want to surround myself with
       industry experts, contribute to alpha generation or execution optimization, and ultimately
       evolve into a top-tier Quantitative Researcher or Algorithmic Trader.</p>
@@ -235,7 +222,6 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-dashboard" class="page active">
 
-  <div class="eyebrow">Live — Binance Demo Trading</div>
   <h1 style="font-size:28px;margin-bottom:6px">Portfolio Overview</h1>
   <p class="lede">Paper capital, real market data, real execution logic. Updated every 30s.</p>
 
@@ -368,8 +354,6 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
     </div>
   </div>
 
-  <div class="disclaimer">Paper trading only — no real funds involved. Pair selected via Engle-Granger cointegration + Rolling OLS hedge ratio, entries filtered by LightGBM meta-labeling (60% confidence threshold). Three independent stop-loss layers active.</div>
-
   <!-- ═══ FUNDING CARRY SECTION ═══ -->
   <div class="strat-header">
     <div class="strat-icon" style="border-color:var(--carry);color:var(--carry)">%</div>
@@ -438,8 +422,6 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
     </div>
   </div>
 
-  <div class="disclaimer">Paper trading only — no real funds involved. Universe filtered on 30d APR &gt; 4%, positive-payment consistency &gt; 60%, checked every 8h at Binance funding timestamps. Exit on rolling 5-payment average turning negative or 45-day time limit.</div>
-
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════ -->
@@ -447,7 +429,6 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-research" class="page">
 
-  <div class="eyebrow">Research Log</div>
   <h1 style="font-size:28px;margin-bottom:6px">From directional prediction<br>to market-neutral carry.</h1>
   <p class="lede">Ordered newest first. Every phase includes what was tested, what the numbers said, and why it did or didn't ship.</p>
 

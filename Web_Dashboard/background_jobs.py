@@ -20,6 +20,7 @@ from datetime import datetime
 
 # ── Chemins vers les modules des autres dossiers ───────────────
 ROOT_DIR = Path(__file__).parent.parent  # ML_Crypto_Bot/
+sys.path.insert(0, str(ROOT_DIR))
 sys.path.insert(0, str(ROOT_DIR / "Regime_Detector"    / "scripts"))
 sys.path.insert(0, str(ROOT_DIR / "StatArb_ETH_15m"    / "scripts"))
 sys.path.insert(0, str(ROOT_DIR / "FundingCarry_Multi" / "scripts"))
@@ -73,6 +74,25 @@ def regime_loop():
             time.sleep(300)
 
 
+def _is_stale(json_path, max_age_hours):
+    """Retourne True si le fichier n'existe pas ou dépasse max_age_hours."""
+    import json as _json
+    from datetime import datetime as _dt
+    try:
+        with open(json_path) as f:
+            data = _json.load(f)
+        ts_str = data.get('updated') or data.get('timestamp')
+        if not ts_str:
+            return True
+        ts = _dt.strptime(ts_str, '%Y-%m-%d %H:%M:%S')
+        age_hours = (_dt.now() - ts).total_seconds() / 3600
+        return age_hours > max_age_hours
+    except FileNotFoundError:
+        return True
+    except Exception:
+        return True
+
+
 def statarb_rescan_loop():
     """Relance le scan de cointégration (11 paires candidates) toutes les 7
     jours (thread séparé, tourne en parallèle du bot de trading StatArb)."""
@@ -87,20 +107,26 @@ def statarb_rescan_loop():
 
 
 def trading_loop():
-    """Lance select_pair.py (scan initial + rescan hebdo en thread interne)
-    puis live_bot.py en continu, avec backoff exponentiel si crash."""
+    """Lance select_pair.py (scan uniquement si périmé, puis rescan hebdo
+    en thread interne) puis live_bot.py en continu, avec backoff si crash."""
     from select_pair import get_best_pair  # type: ignore
     from live_bot import main as bot_main  # type: ignore
+    from config import PATHS  # type: ignore
 
     # Démarre en 2ème — décalé pour ne pas cumuler avec regime_loop
     time.sleep(random.uniform(30, 45))
 
     print("[BG] 🤖 Trading loop démarré")
 
-    try:
-        get_best_pair(verbose=True)
-    except Exception as e:
-        print(f"[BG] ⚠️ Erreur scan StatArb pair initial : {e}")
+    # Ne rescanner que si best_pair.json est absent ou vieux de +7 jours —
+    # évite de reprovoquer un ban Binance à chaque redéploiement Render.
+    if _is_stale(PATHS['best_pair_json'], max_age_hours=7*24):
+        try:
+            get_best_pair(verbose=True)
+        except Exception as e:
+            print(f"[BG] ⚠️ Erreur scan StatArb pair initial : {e}")
+    else:
+        print("[BG] 📊 best_pair.json récent — scan initial sauté")
 
     # Thread interne pour le rescan hebdomadaire (indépendant du bot bloquant)
     threading.Thread(target=statarb_rescan_loop, daemon=True, name="statarb_rescan_thread").start()
@@ -132,19 +158,23 @@ def funding_rescan_loop():
 
 
 def funding_loop():
-    """Lance select_funding_pair.py (scan initial + rescan quotidien en
-    thread interne) puis live_funding_bot.py en continu."""
+    """Lance select_funding_pair.py (scan uniquement si périmé, puis rescan
+    quotidien en thread interne) puis live_funding_bot.py en continu."""
     from select_funding_pair import get_best_funding  # type: ignore
     from live_funding_bot import main as funding_main   # type: ignore
+    from config import PATHS  # type: ignore
 
     # Démarre en 3ème — décalé pour laisser respirer les 2 autres bots
     time.sleep(random.uniform(90, 120))
     print("[BG] 💰 Funding loop démarré")
 
-    try:
-        get_best_funding(verbose=True)
-    except Exception as e:
-        print(f"[BG] ⚠️ Erreur scan funding initial : {e}")
+    if _is_stale(PATHS['best_funding_json'], max_age_hours=24):
+        try:
+            get_best_funding(verbose=True)
+        except Exception as e:
+            print(f"[BG] ⚠️ Erreur scan funding initial : {e}")
+    else:
+        print("[BG] 💰 best_funding.json récent — scan initial sauté")
 
     # Thread interne pour le rescan quotidien (indépendant du bot bloquant)
     threading.Thread(target=funding_rescan_loop, daemon=True, name="funding_rescan_thread").start()

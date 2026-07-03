@@ -10,6 +10,7 @@ Peut être appelé :
   - En import     : from select_pair import get_best_pair
 """
 
+import time
 import ccxt
 import pandas as pd
 import numpy as np
@@ -213,6 +214,7 @@ def get_best_pair(verbose=True):
     if verbose:
         print("\n📥 Téléchargement des données...")
     for sym in all_symbols:
+        time.sleep(0.5)  # Espace les appels pour éviter de dépasser le rate-limit weight
         df = fetch_close(sym)
         if df is not None and len(df) > WINDOW * 3:
             prices[sym] = df
