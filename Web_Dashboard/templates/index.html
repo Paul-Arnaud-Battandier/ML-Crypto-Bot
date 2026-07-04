@@ -3,8 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Paul Arnaud-Battandier — Quant Research Terminal</title>
-<meta http-equiv="refresh" content="30">
+<title>Algo Trading Bot — Quant Research Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -808,6 +807,9 @@ function makeEquityChart(canvasId, labels, values){
 }
 makeEquityChart('statarbChart', {{ statarb.chart_labels | tojson }}, {{ statarb.chart_values | tojson }});
 makeEquityChart('fundingChart', {{ funding.chart_labels | tojson }}, {{ funding.chart_values | tojson }});
+// Auto-refresh — via JS plutôt que <meta refresh> pour garantir que le
+// hash de l'onglet actif (#dashboard, #research, #about) est préservé
+setTimeout(() => location.reload(), 30000);
 </script>
 </body>
 </html>
