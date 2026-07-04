@@ -773,7 +773,17 @@ function nav(id, btn){
   document.querySelectorAll('.navtab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   btn.classList.add('active');
+  history.replaceState(null, '', '#'+id);
 }
+
+// Restaure l'onglet actif après le refresh auto de 30s (via meta refresh)
+(function(){
+  const wanted = location.hash.replace('#','');
+  if(!wanted) return;
+  const btn = Array.from(document.querySelectorAll('.navtab'))
+    .find(b => b.getAttribute('onclick').includes("'"+wanted+"'"));
+  if(btn) nav(wanted, btn);
+})();
 
 Chart.defaults.font.family = "'IBM Plex Mono', monospace";
 

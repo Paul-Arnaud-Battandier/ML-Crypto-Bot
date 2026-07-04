@@ -394,12 +394,16 @@ def main():
                         r = regime['regime']
                         if regime['strategies'].get('funding_carry') != True:
                             print(f"  🚫 Funding carry désactivé (régime {r})")
+                            log_trade("REJECTED_REGIME", best['symbol'] if best else None,
+                                      0, 0, 0, exit_reason=f"regime={r}")
                             time.sleep(60)
                             continue
 
                     # Vérification paire
                     if not best or not best.get('valid'):
                         print("  🚫 Aucune opportunité valide — APR insuffisant")
+                        log_trade("REJECTED_NO_PAIR", best['symbol'] if best else None,
+                                  0, 0, 0, exit_reason="no_valid_opportunity")
                         time.sleep(60)
                         continue
 
@@ -416,6 +420,8 @@ def main():
                     # Entrée seulement si le funding actuel est positif
                     if current_fr <= 0:
                         print(f"  🚫 Funding actuel négatif ({current_fr*100:.4f}%) — on attend")
+                        log_trade("REJECTED_NEG_FUNDING", sym, spot_price, perp_price,
+                                  current_fr, exit_reason="funding_rate<=0")
                         time.sleep(60)
                         continue
 
