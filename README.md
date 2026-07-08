@@ -136,5 +136,5 @@ This project trades exclusively on **Binance Demo Trading** (paper money, simula
 ## About
 
 Paul Arnaud-Battandier — Finance & Quantitative Engineering, ECE.
-Seeking an end-of-studies internship (Jan 2027) in trading or quantitative research.
+Seeking a 6 month end-of-studies internship (Jan 2027) in trading or quantitative research.
 [LinkedIn](https://www.linkedin.com/in/paul-arnaud-battandier/) · [GitHub](https://github.com/Paul-Arnaud-Battandier) · [CV](Web_Dashboard/static/CV_Paul_Arnaud-Battandier.pdf)
