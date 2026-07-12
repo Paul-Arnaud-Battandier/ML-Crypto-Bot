@@ -31,7 +31,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
-sys.path.insert(0, str(Path(__file__).parent.parent))  # ML_Crypto_Bot/
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # ML_Crypto_Bot/
 from state_store import set_state
 import os
 
