@@ -11,6 +11,16 @@ Logique :
   3. Si ETH hurst < 0.43 + ADX  → MEAN_REV  (stat arb)
   4. Sinon                       → NEUTRAL
 
+── Source de données : Kraken (pas Binance) ────────────────────
+Binance bloque (HTTP 451) toutes les IP de datacenters US, ce qui
+inclut les runners GitHub Actions. Ce script ne fait que lire des
+prix publics (pas de compte, pas d'ordre) — n'importe quel exchange
+liquide donne des indicateurs équivalents. Kraken n'a pas ce
+blocage géographique, donc on l'utilise ici.
+⚠️ Les bots de trading (StatArb, Funding Carry) restent sur Binance
+Demo Trading — ce changement ne concerne QUE la lecture de prix
+pour le calcul du régime.
+
 ── Script one-shot (GitHub Actions) ────────────────────────────
 Ce script est lancé sur une machine neuve à chaque exécution (cron
 GitHub Actions, toutes les heures). Il ne garde aucun état local —
@@ -140,7 +150,7 @@ def get_current_regime(verbose=True):
     Calcule le régime actuel (BTC vol + ETH hurst/ADX), l'écrit dans
     bot_state['current_regime'] (Supabase) et dans regime_history (log).
     """
-    exchange = ccxt.binance({'enableRateLimit': True})
+    exchange = ccxt.kraken({'enableRateLimit': True})
 
     df_btc = fetch_ohlcv(exchange, 'BTC/USDT', limit=150)
     df_eth = fetch_ohlcv(exchange, 'ETH/USDT', limit=150)
