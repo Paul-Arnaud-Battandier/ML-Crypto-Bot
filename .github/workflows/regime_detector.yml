@@ -1,0 +1,28 @@
+name: Regime Detector (hourly)
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # Toutes les heures, à l'heure pile (UTC)
+  workflow_dispatch:        # Permet de lancer manuellement depuis l'onglet Actions
+
+jobs:
+  compute-regime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r Regime_Detector/requirements.txt
+
+      - name: Run regime detector
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python Regime_Detector/scripts/compute_regime.py
