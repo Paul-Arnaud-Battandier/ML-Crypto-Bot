@@ -34,6 +34,7 @@ load_dotenv()
 ROOT_DIR   = Path(__file__).parent.parent.parent   # ML_Crypto_Bot/
 sys.path.insert(0, str(ROOT_DIR))
 from config import PATHS
+from state_store import get_state
 
 CARRY_DIR  = ROOT_DIR / "FundingCarry_Multi" / "data"
 CARRY_DIR.mkdir(exist_ok=True)
@@ -199,11 +200,12 @@ def get_current_funding_rate(perp_ex, symbol):
 
 # ── Lectures régime et paire ──────────────────────────────────
 def read_regime():
-    try:
-        with open(REGIME_JSON) as f:
-            return json.load(f)
-    except:
-        return None
+    """
+    Lit le régime actuel depuis Supabase (bot_state['current_regime']).
+    compute_regime.py tourne maintenant sur GitHub Actions (Kraken),
+    donc plus de fichier local à lire — voir live_bot.py pour le détail.
+    """
+    return get_state('current_regime')
 
 def read_best_funding():
     try:

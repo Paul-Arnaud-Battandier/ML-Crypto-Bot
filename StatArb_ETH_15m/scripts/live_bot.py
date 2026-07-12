@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent.parent.parent  # ML_Crypto_Bot/
 sys.path.insert(0, str(ROOT_DIR))
 from config import PATHS
+from state_store import get_state
 
 # --- Chemins (centralisés dans config.py) ---
 DATA_DIR = PATHS['statarb_data']
@@ -49,18 +50,25 @@ SYM2 = DEFAULT_SYM2
 
 # ── Lecture régime et paire ────────────────────────────────────
 def read_regime():
-    """Lit le régime actuel depuis Regime_Detector/data/current_regime.json"""
+    """
+    Lit le régime actuel depuis Supabase (bot_state['current_regime']).
+    compute_regime.py tourne maintenant sur GitHub Actions (Kraken, pas
+    Binance — bloqué pour les IP de datacenter US) et écrit son résultat
+    dans Supabase plutôt que dans un fichier local, puisque chaque
+    exécution GH Actions a lieu sur une machine neuve et jetable.
+    """
+    data = get_state('current_regime')
+    if data is None:
+        print("  ⚠️  Régime non disponible — vérifie que le workflow GitHub Actions tourne")
+        return None
     try:
-        with open(REGIME_JSON) as f:
-            data = json.load(f)
         ts  = datetime.strptime(data['timestamp'], '%Y-%m-%d %H:%M:%S')
         age = (datetime.now() - ts).total_seconds() / 3600
         if age > 2:
-            print(f"  ⚠️  Régime obsolète ({age:.1f}h) — lance live_regime.py")
-        return data
-    except FileNotFoundError:
-        print("  ⚠️  Régime non disponible — lance compute_regime.py d'abord")
-        return None
+            print(f"  ⚠️  Régime obsolète ({age:.1f}h) — vérifie le workflow GitHub Actions")
+    except Exception:
+        pass
+    return data
 
 def read_best_pair():
     """Lit la meilleure paire depuis Regime_Detector/data/best_pair.json"""

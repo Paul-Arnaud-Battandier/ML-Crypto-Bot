@@ -70,54 +70,6 @@ def run_scan_subprocess(script_path, label, timeout=600):
         return False
 
 
-def regime_loop():
-    """
-    Recalcule le régime au démarrage puis toutes les heures.
-    Utilise un timer basé sur le temps écoulé (pas une fenêtre
-    d'horloge exacte) pour éviter de rater le déclenchement à
-    cause d'un léger décalage de timing entre les checks.
-    """
-    from compute_regime import get_current_regime  # type: ignore
-
-    # Démarre en premier — délai court
-    time.sleep(random.uniform(3, 8))
-
-    print("[BG] 🎯 Regime loop démarré")
-
-    REFRESH_SECONDS = 3600  # 1h
-    last_run = None
-
-    def try_run():
-        nonlocal last_run
-        try:
-            get_current_regime(verbose=True)
-            last_run = datetime.now()
-            gc.collect()
-            return True
-        except Exception as e:
-            print(f"[BG] ⚠️ Erreur calcul régime : {e}")
-            return False
-
-    # Premier calcul immédiat
-    if not try_run():
-        print("[BG] ⏳ Pause 5min avant nouvelle tentative (évite spam API)")
-        time.sleep(300)
-        try_run()
-
-    while True:
-        try:
-            elapsed = (datetime.now() - last_run).total_seconds() if last_run else REFRESH_SECONDS
-            if elapsed >= REFRESH_SECONDS:
-                if not try_run():
-                    print("[BG] ⏳ Pause 5min avant retry (protection rate-limit)")
-                    time.sleep(300)
-                    continue
-            time.sleep(30)
-        except Exception as e:
-            print(f"[BG] ❌ Erreur regime_loop : {e}")
-            time.sleep(300)
-
-
 def _is_stale(json_path, max_age_hours):
     """Retourne True si le fichier n'existe pas ou dépasse max_age_hours."""
     import json as _json
@@ -153,7 +105,7 @@ def trading_loop():
     from live_bot import main as bot_main  # type: ignore
     from config import PATHS  # type: ignore
 
-    # Démarre en 2ème — décalé pour ne pas cumuler avec regime_loop
+    # Démarre en 1er (des 2 boucles restantes) — décalé pour lisser la charge API
     time.sleep(random.uniform(30, 45))
 
     print("[BG] 🤖 Trading loop démarré")
@@ -223,12 +175,15 @@ def funding_loop():
 
 
 def start_background_jobs():
-    """Démarre les trois boucles principales en threads daemon (non-bloquant).
-    Les scans de sélection de paire (StatArb hebdo, Funding quotidien)
-    tournent en sous-processus isolés pour ne jamais charger statsmodels/
-    scipy dans la mémoire résidente du process principal.
+    """Démarre les deux boucles principales en threads daemon (non-bloquant).
+    Le régime tourne maintenant sur GitHub Actions (cron horaire, Kraken —
+    Binance bloque les IP de datacenter US) et écrit dans Supabase, plus
+    besoin de le faire tourner ici. Les scans de sélection de paire
+    (StatArb hebdo, Funding quotidien) tournent en sous-processus isolés
+    pour ne jamais charger statsmodels/scipy dans la mémoire résidente
+    du process principal.
     """
-    threading.Thread(target=regime_loop,  daemon=True, name="regime_thread").start()
     threading.Thread(target=trading_loop, daemon=True, name="trading_thread").start()
     threading.Thread(target=funding_loop, daemon=True, name="funding_thread").start()
-    print("[BG] ✅ Threads de fond lancés (régime + statarb[+rescan 7j] + funding[+rescan 24h])")
+    print("[BG] ✅ Threads de fond lancés (statarb[+rescan 7j] + funding[+rescan 24h])")
+    print("[BG] ℹ️  Régime calculé désormais sur GitHub Actions (cron horaire)")
