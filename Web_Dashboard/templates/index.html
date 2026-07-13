@@ -268,28 +268,28 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
             <span style="width:10px;height:10px;border-radius:2px;background:var(--mr);display:inline-block"></span>
             MEAN_REV <span style="color:var(--dim-2)">(StatArb)</span>
           </span>
-          <span class="mono" style="font-size:13px">{{ regime_dist.pct.MEAN_REV }}% · {{ regime_dist.values[0] }}</span>
+          <span class="mono" style="font-size:13px">{{ regime_dist.pct.MEAN_REV }}% · {{ regime_dist.counts[0] }}</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between">
           <span style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12.5px">
             <span style="width:10px;height:10px;border-radius:2px;background:var(--tr);display:inline-block"></span>
             TRENDING <span style="color:var(--dim-2)">(unallocated)</span>
           </span>
-          <span class="mono" style="font-size:13px">{{ regime_dist.pct.TRENDING }}% · {{ regime_dist.values[1] }}</span>
+          <span class="mono" style="font-size:13px">{{ regime_dist.pct.TRENDING }}% · {{ regime_dist.counts[1] }}</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between">
           <span style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12.5px">
             <span style="width:10px;height:10px;border-radius:2px;background:var(--hv);display:inline-block"></span>
             HIGH_VOL <span style="color:var(--dim-2)">(Funding Carry)</span>
           </span>
-          <span class="mono" style="font-size:13px">{{ regime_dist.pct.HIGH_VOL }}% · {{ regime_dist.values[2] }}</span>
+          <span class="mono" style="font-size:13px">{{ regime_dist.pct.HIGH_VOL }}% · {{ regime_dist.counts[2] }}</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between">
           <span style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12.5px">
             <span style="width:10px;height:10px;border-radius:2px;background:var(--nt);display:inline-block"></span>
             NEUTRAL <span style="color:var(--dim-2)">(Funding Carry)</span>
           </span>
-          <span class="mono" style="font-size:13px">{{ regime_dist.pct.NEUTRAL }}% · {{ regime_dist.values[3] }}</span>
+          <span class="mono" style="font-size:13px">{{ regime_dist.pct.NEUTRAL }}% · {{ regime_dist.counts[3] }}</span>
         </div>
       </div>
     </div>
@@ -856,7 +856,7 @@ makeEquityChart('fundingChart', {{ funding.chart_labels | tojson }}, {{ funding.
 (function(){
   const el = document.getElementById('regimeChart');
   if (!el) return;
-  const values = {{ regime_dist.values | tojson }};
+  const values = {{ regime_dist.counts | tojson }};
   if (values.reduce((a,b) => a+b, 0) === 0) return;  // pas encore de données
   new Chart(el, {
     type: 'doughnut',

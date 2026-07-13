@@ -132,7 +132,7 @@ def get_regime_distribution(limit=500):
     total = sum(counts.values())
     return {
         'labels' : list(counts.keys()),
-        'values' : list(counts.values()),
+        'counts' : list(counts.values()),
         'total'  : total,
         'pct'    : {k: round(v / total * 100, 1) if total else 0 for k, v in counts.items()},
     }
