@@ -180,7 +180,7 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
   <div style="margin-bottom:36px">
     <h1 style="font-size:26px">Paul Arnaud-Battandier</h1>
     <p style="color:var(--dim);font-size:14.5px;margin-top:6px">Major in Finance &amp; Quantitative Engineering · ECE Paris</p>
-    <p style="color:var(--amber);font-size:14px;margin-top:8px;font-weight:500">Seeking a 6 month end-of-studies internship · January 2027 · Trading or Quantitative Research</p>
+    <p style="color:var(--amber);font-size:14px;margin-top:8px;font-weight:500">Seeking an end-of-studies internship · Jan/Feb 2027 · Trading or Quantitative Research</p>
     <div class="about-links">
       <a class="link-btn" href="https://www.linkedin.com/in/paul-arnaud-battandier/" target="_blank">LinkedIn</a>
       <a class="link-btn" href="https://github.com/Paul-Arnaud-Battandier" target="_blank">GitHub</a>
@@ -253,6 +253,48 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
     </div>
   </div>
 
+  <!-- ═══ REGIME DISTRIBUTION ═══ -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="stat-label" style="margin-bottom:12px">
+      Regime Distribution — last {{ regime_dist.total }} hourly readings
+    </div>
+    <div style="display:flex;align-items:center;gap:32px;flex-wrap:wrap">
+      <div style="width:180px;height:180px;flex-shrink:0">
+        <canvas id="regimeChart"></canvas>
+      </div>
+      <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12.5px">
+            <span style="width:10px;height:10px;border-radius:2px;background:var(--mr);display:inline-block"></span>
+            MEAN_REV <span style="color:var(--dim-2)">(StatArb)</span>
+          </span>
+          <span class="mono" style="font-size:13px">{{ regime_dist.pct.MEAN_REV }}% · {{ regime_dist.values[0] }}</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12.5px">
+            <span style="width:10px;height:10px;border-radius:2px;background:var(--tr);display:inline-block"></span>
+            TRENDING <span style="color:var(--dim-2)">(unallocated)</span>
+          </span>
+          <span class="mono" style="font-size:13px">{{ regime_dist.pct.TRENDING }}% · {{ regime_dist.values[1] }}</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12.5px">
+            <span style="width:10px;height:10px;border-radius:2px;background:var(--hv);display:inline-block"></span>
+            HIGH_VOL <span style="color:var(--dim-2)">(Funding Carry)</span>
+          </span>
+          <span class="mono" style="font-size:13px">{{ regime_dist.pct.HIGH_VOL }}% · {{ regime_dist.values[2] }}</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12.5px">
+            <span style="width:10px;height:10px;border-radius:2px;background:var(--nt);display:inline-block"></span>
+            NEUTRAL <span style="color:var(--dim-2)">(Funding Carry)</span>
+          </span>
+          <span class="mono" style="font-size:13px">{{ regime_dist.pct.NEUTRAL }}% · {{ regime_dist.values[3] }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══ STATARB SECTION ═══ -->
   <div class="strat-header">
     <div class="strat-icon" style="border-color:var(--mr);color:var(--mr)">Σ</div>
@@ -281,9 +323,9 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
       <div class="stat-sub">{{ statarb.stats.total_trades }} closed trades</div>
     </div>
     <div class="stat">
-      <div class="stat-label">TP / SL</div>
-      <div class="stat-value"><span class="up">{{ statarb.stats.tp_count }}</span><span style="color:var(--dim-2)"> / </span><span class="down">{{ statarb.stats.sl_count }}</span></div>
-      <div class="stat-sub">Take Profit / Stop Loss</div>
+      <div class="stat-label">Wins / Losses</div>
+      <div class="stat-value"><span class="up">{{ statarb.stats.win_count }}</span><span style="color:var(--dim-2)"> / </span><span class="down">{{ statarb.stats.loss_count }}</span></div>
+      <div class="stat-sub">Based on realized P&amp;L</div>
     </div>
   </div>
 
@@ -339,7 +381,9 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
             </td>
             <td>{% if t.duration_candles %}{{ t.duration_candles }}c{% else %}—{% endif %}</td>
             <td>
-              {% if t.exit_reason == 'TP' %}<span class="up">TP</span>
+              {% if t.exit_reason == 'SIGNAL_EXIT' %}
+                {% if (t.pnl_pct or 0) > 0 %}<span class="up">Z→0 (win)</span>
+                {% else %}<span class="down">Z→0 (loss)</span>{% endif %}
               {% elif t.exit_reason and t.exit_reason.startswith('STOP') %}<span class="down">{{ t.exit_reason }}</span>
               {% elif t.exit_reason == 'TIME_LIMIT' %}<span style="color:var(--tr)">TIME</span>
               {% else %}—{% endif %}
@@ -807,6 +851,39 @@ function makeEquityChart(canvasId, labels, values){
 }
 makeEquityChart('statarbChart', {{ statarb.chart_labels | tojson }}, {{ statarb.chart_values | tojson }});
 makeEquityChart('fundingChart', {{ funding.chart_labels | tojson }}, {{ funding.chart_values | tojson }});
+
+// Regime distribution pie chart
+(function(){
+  const el = document.getElementById('regimeChart');
+  if (!el) return;
+  const values = {{ regime_dist.values | tojson }};
+  if (values.reduce((a,b) => a+b, 0) === 0) return;  // pas encore de données
+  new Chart(el, {
+    type: 'doughnut',
+    data: {
+      labels: ['MEAN_REV', 'TRENDING', 'HIGH_VOL', 'NEUTRAL'],
+      datasets: [{
+        data: values,
+        backgroundColor: ['#2dd4a7', '#f2994a', '#ef5354', '#6b7685'],
+        borderColor: '#12161d',
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.label}: ${ctx.parsed} readings`
+          }
+        }
+      },
+      cutout: '60%',
+    }
+  });
+})();
 // Auto-refresh — via JS plutôt que <meta refresh> pour garantir que le
 // hash de l'onglet actif (#dashboard, #research, #about) est préservé
 setTimeout(() => location.reload(), 30000);

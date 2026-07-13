@@ -51,16 +51,19 @@ def get_statarb_data():
     all_exits = sb_get('live_trades', 'action=eq.EXIT&order=id.desc&limit=500')
     pnl_list  = [t['pnl_pct'] for t in all_exits if t.get('pnl_pct') is not None]
     wins      = [p for p in pnl_list if p > 0]
-    sl_trades = [t for t in all_exits if (t.get('exit_reason') or '').startswith('STOP')]
-    tp_trades = [t for t in all_exits if t.get('exit_reason') == 'TP']
+    # Wins/Losses basés sur le vrai P&L, pas sur le nom du déclencheur de sortie —
+    # un exit "SIGNAL_EXIT" (Z revenu à 0) peut être perdant après frais/hedge imparfait,
+    # et ce n'est pas pour autant un Stop-Loss (les seuils SL ne se sont pas déclenchés).
+    win_trades  = [p for p in pnl_list if p > 0]
+    loss_trades = [p for p in pnl_list if p <= 0]
 
     stats = {
         'total_trades': len(pnl_list),
         'win_rate'    : round(len(wins) / len(pnl_list) * 100, 1) if pnl_list else 0,
         'total_pnl'   : round(sum(pnl_list) * 100, 2) if pnl_list else 0,
         'avg_pnl'     : round(sum(pnl_list) / len(pnl_list) * 100, 3) if pnl_list else 0,
-        'tp_count'    : len(tp_trades),
-        'sl_count'    : len(sl_trades),
+        'win_count'   : len(win_trades),
+        'loss_count'  : len(loss_trades),
     }
 
     current = equity_raw[-1] if equity_raw else {
@@ -112,6 +115,29 @@ def get_funding_data():
     }
 
 
+def get_regime_distribution(limit=500):
+    """
+    Compte combien de fois chaque régime a été observé sur les <limit>
+    derniers relevés horaires (limit=500 ≈ 20 jours d'historique).
+    Permet de voir concrètement quelle stratégie a été active le plus
+    souvent — utile pour comprendre pourquoi Funding Carry (actif en
+    HIGH_VOL/NEUTRAL) peut sembler silencieux si MEAN_REV domine.
+    """
+    rows = sb_get('regime_history', f'order=id.desc&limit={limit}')
+    counts = {'MEAN_REV': 0, 'TRENDING': 0, 'HIGH_VOL': 0, 'NEUTRAL': 0}
+    for r in rows:
+        reg = r.get('regime')
+        if reg in counts:
+            counts[reg] += 1
+    total = sum(counts.values())
+    return {
+        'labels' : list(counts.keys()),
+        'values' : list(counts.values()),
+        'total'  : total,
+        'pct'    : {k: round(v / total * 100, 1) if total else 0 for k, v in counts.items()},
+    }
+
+
 @app.route('/')
 def index():
     statarb  = get_statarb_data()
@@ -119,6 +145,7 @@ def index():
 
     regime_data = sb_get('regime_history', 'order=id.desc&limit=1')
     regime = regime_data[0] if regime_data else None
+    regime_dist = get_regime_distribution()
 
     # ── Résumé global (somme des deux stratégies) ─────────────
     global_capital = (statarb['current'].get('equity_usdt') or 0) + \
@@ -126,6 +153,7 @@ def index():
 
     return render_template('index.html',
         regime=regime,
+        regime_dist=regime_dist,
         statarb=statarb,
         funding=funding,
         global_capital=global_capital,

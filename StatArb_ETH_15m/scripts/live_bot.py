@@ -550,7 +550,7 @@ def main():
                             z, 0, pos_aave_size, pos_eth_size,
                             entry_price_aave, entry_price_eth,
                             entry_candle, candle_count,
-                            hedge_ratio, spread_value, exit_reason="TP"
+                            hedge_ratio, spread_value, exit_reason="SIGNAL_EXIT"
                         )
                         direction_int = 0
 
@@ -586,7 +586,7 @@ def main():
                             z, 0, pos_aave_size, pos_eth_size,
                             entry_price_aave, entry_price_eth,
                             entry_candle, candle_count,
-                            hedge_ratio, spread_value, exit_reason="TP"
+                            hedge_ratio, spread_value, exit_reason="SIGNAL_EXIT"
                         )
                         direction_int = 0
 
