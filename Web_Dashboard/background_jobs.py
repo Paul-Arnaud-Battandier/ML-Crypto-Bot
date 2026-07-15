@@ -37,7 +37,7 @@ sys.path.insert(0, str(ROOT_DIR / "Regime_Detector"    / "scripts"))
 sys.path.insert(0, str(ROOT_DIR / "StatArb_ETH_15m"    / "scripts"))
 sys.path.insert(0, str(ROOT_DIR / "FundingCarry_Multi" / "scripts"))
 
-SELECT_PAIR_SCRIPT    = ROOT_DIR / "StatArb_ETH_15m"    / "scripts" / "select_pair.py"
+SELECT_PAIR_SCRIPT    = ROOT_DIR / "Regime_Detector"    / "scripts" / "select_pair.py"
 SELECT_FUNDING_SCRIPT = ROOT_DIR / "FundingCarry_Multi" / "scripts" / "select_funding_pair.py"
 
 
