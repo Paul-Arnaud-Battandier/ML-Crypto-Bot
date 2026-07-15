@@ -208,11 +208,8 @@ def read_regime():
     return get_state('current_regime')
 
 def read_best_funding():
-    try:
-        with open(FUNDING_JSON) as f:
-            return json.load(f)
-    except:
-        return None
+    """Lit la meilleure opportunité depuis Supabase (bot_state['best_funding'])"""
+    return get_state('best_funding')
 
 
 # ── Logique de sortie ─────────────────────────────────────────

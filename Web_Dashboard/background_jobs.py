@@ -70,23 +70,20 @@ def run_scan_subprocess(script_path, label, timeout=600):
         return False
 
 
-def _is_stale(json_path, max_age_hours):
-    """Retourne True si le fichier n'existe pas ou dépasse max_age_hours."""
-    import json as _json
-    from datetime import datetime as _dt
-    try:
-        with open(json_path) as f:
-            data = _json.load(f)
-        ts_str = data.get('updated') or data.get('timestamp')
-        if not ts_str:
-            return True
-        ts = _dt.strptime(ts_str, '%Y-%m-%d %H:%M:%S')
-        age_hours = (_dt.now() - ts).total_seconds() / 3600
-        return age_hours > max_age_hours
-    except FileNotFoundError:
+def _is_stale(state_key, max_age_hours):
+    """
+    Retourne True si l'état Supabase (bot_state[state_key]) est absent
+    ou dépasse max_age_hours. Remplace l'ancien check basé sur des
+    fichiers locaux — ceux-ci ne survivent pas aux redéploiements Render
+    (filesystem éphémère), donc lire un fichier local juste après un
+    push renvoyait toujours "absent" et forçait un rescan inutile à
+    chaque déploiement.
+    """
+    from state_store import get_state_age_hours
+    age = get_state_age_hours(state_key)
+    if age is None:
         return True
-    except Exception:
-        return True
+    return age > max_age_hours
 
 
 def statarb_rescan_loop():
@@ -112,7 +109,7 @@ def trading_loop():
 
     # Ne rescanner que si best_pair.json est absent ou vieux de +7 jours —
     # évite de reprovoquer un ban Binance à chaque redéploiement Render.
-    if _is_stale(PATHS['best_pair_json'], max_age_hours=7*24):
+    if _is_stale('best_pair', max_age_hours=7*24):
         run_scan_subprocess(SELECT_PAIR_SCRIPT, "select_pair.py")
         gc.collect()
     else:
@@ -154,7 +151,7 @@ def funding_loop():
     time.sleep(random.uniform(90, 120))
     print("[BG] 💰 Funding loop démarré")
 
-    if _is_stale(PATHS['best_funding_json'], max_age_hours=24):
+    if _is_stale('best_funding', max_age_hours=24):
         run_scan_subprocess(SELECT_FUNDING_SCRIPT, "select_funding_pair.py")
         gc.collect()
     else:

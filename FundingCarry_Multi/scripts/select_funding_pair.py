@@ -15,6 +15,7 @@ import pandas as pd
 import numpy as np
 import json
 import os
+import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -24,6 +25,11 @@ load_dotenv()
 # ── Chemins ───────────────────────────────────────────────────
 ROOT_DIR          = Path(__file__).parent.parent
 DATA_DIR          = ROOT_DIR / "data"
+
+# Racine du projet (ML_Crypto_Bot/) — un niveau au-dessus de FundingCarry_Multi/
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+from state_store import get_state, set_state
 DATA_DIR.mkdir(exist_ok=True)
 BEST_FUNDING_FILE = DATA_DIR / "best_funding.json"
 
@@ -192,28 +198,29 @@ def get_best_funding(verbose=True):
     best['bnb_discount']= BNB_DISCOUNT
     best['round_trip_fee_pct'] = round(ROUND_TRIP_FEE * 100, 3)
 
-    with open(BEST_FUNDING_FILE, 'w') as f:
-        json.dump(best, f, indent=2)
+    # Sauvegarde (Supabase — le fichier local ne survit pas aux redéploiements Render)
+    set_state('best_funding', best)
 
     if verbose:
-        print(f"\n💾 Sauvegardé : {BEST_FUNDING_FILE}")
+        print(f"\n💾 Sauvegardé dans Supabase (bot_state['best_funding'])")
 
     return best
 
 
 def read_best_funding():
-    """Lit la meilleure opportunité depuis best_funding.json"""
+    """Lit la meilleure opportunité depuis Supabase (bot_state['best_funding'])"""
+    data = get_state('best_funding')
+    if data is None:
+        print("⚠️  Aucun scan funding — lance select_funding_pair.py d'abord")
+        return None
     try:
-        with open(BEST_FUNDING_FILE) as f:
-            data = json.load(f)
         ts  = datetime.strptime(data['updated'], '%Y-%m-%d %H:%M:%S')
         age = (datetime.now() - ts).total_seconds() / 3600 / 24
         if age > 8:
             print(f"⚠️  Scan funding obsolète ({age:.1f}j) — relance select_funding_pair.py")
-        return data
-    except FileNotFoundError:
-        print("⚠️  Aucun scan funding — lance select_funding_pair.py d'abord")
-        return None
+    except Exception:
+        pass
+    return data
 
 
 if __name__ == "__main__":

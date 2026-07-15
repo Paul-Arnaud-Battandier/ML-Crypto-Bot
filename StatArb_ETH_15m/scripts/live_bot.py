@@ -71,18 +71,19 @@ def read_regime():
     return data
 
 def read_best_pair():
-    """Lit la meilleure paire depuis Regime_Detector/data/best_pair.json"""
+    """Lit la meilleure paire depuis Supabase (bot_state['best_pair'])"""
+    data = get_state('best_pair')
+    if data is None:
+        print(f"  ⚠️  Aucun scan paire — utilisation paire par défaut ({DEFAULT_SYM1}/{DEFAULT_SYM2})")
+        return None
     try:
-        with open(PAIR_JSON) as f:
-            data = json.load(f)
         ts  = datetime.strptime(data['updated'], '%Y-%m-%d %H:%M:%S')
         age = (datetime.now() - ts).total_seconds() / 3600 / 24
         if age > 8:
             print(f"  ⚠️  Scan paire obsolète ({age:.1f}j) — relance select_pair.py")
-        return data
-    except FileNotFoundError:
-        print(f"  ⚠️  Aucun scan paire — utilisation paire par défaut ({DEFAULT_SYM1}/{DEFAULT_SYM2})")
-        return None
+    except Exception:
+        pass
+    return data
 
 def init_csv():
     """Crée les fichiers CSV s'ils n'existent pas avec leurs en-têtes"""

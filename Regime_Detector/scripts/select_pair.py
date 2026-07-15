@@ -11,6 +11,7 @@ Peut être appelé :
 """
 
 import time
+import sys
 import ccxt
 import pandas as pd
 import numpy as np
@@ -24,6 +25,11 @@ from statsmodels.tools import add_constant
 # ── Chemins ───────────────────────────────────────────────────
 ROOT_DIR      = Path(__file__).parent.parent
 DATA_DIR      = ROOT_DIR / "data"
+
+# Racine du projet (ML_Crypto_Bot/) — un niveau au-dessus de Regime_Detector/
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+from state_store import get_state, set_state
 DATA_DIR.mkdir(exist_ok=True)
 BEST_PAIR_FILE = DATA_DIR / "best_pair.json"
 
@@ -265,9 +271,8 @@ def get_best_pair(verbose=True):
 
     best['updated'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    # 5. Sauvegarde
-    with open(BEST_PAIR_FILE, 'w') as f:
-        json.dump(best, f, indent=2)
+    # 5. Sauvegarde (Supabase — le fichier local ne survit pas aux redéploiements Render)
+    set_state('best_pair', best)
 
     # 6. Affichage
     if verbose:
@@ -285,31 +290,31 @@ def get_best_pair(verbose=True):
         print(f"   Zero-Crossings : {best['zero_cross']}")
         print(f"   Hedge Ratio    : {best['hedge_ratio']}")
         print(f"   Valide         : {'✅ Oui' if best['valid'] else '❌ Non'}")
-        print(f"\n💾 Sauvegardé : {BEST_PAIR_FILE}")
+        print(f"\n💾 Sauvegardé dans Supabase (bot_state['best_pair'])")
 
     return best
 
-# ── Lire depuis JSON ──────────────────────────────────────────
+# ── Lire depuis Supabase ───────────────────────────────────────
 def read_best_pair():
     """
-    Lit la meilleure paire depuis le fichier JSON.
+    Lit la meilleure paire depuis Supabase (bot_state['best_pair']).
     À utiliser dans live_bot.py.
 
     Returns:
         dict | None
     """
+    data = get_state('best_pair')
+    if data is None:
+        print("⚠️ Aucun scan disponible — lance select_pair.py d'abord")
+        return None
     try:
-        with open(BEST_PAIR_FILE) as f:
-            data = json.load(f)
-        # Vérifie que le scan date de moins de 8 jours
         ts  = datetime.strptime(data['updated'], '%Y-%m-%d %H:%M:%S')
         age = (datetime.now() - ts).total_seconds() / 3600 / 24
         if age > 8:
             print(f"⚠️ Scan obsolète ({age:.1f}j) — relance select_pair.py")
-        return data
-    except FileNotFoundError:
-        print("⚠️ Aucun scan disponible — lance select_pair.py d'abord")
-        return None
+    except Exception:
+        pass
+    return data
 
 if __name__ == "__main__":
     get_best_pair(verbose=True)
