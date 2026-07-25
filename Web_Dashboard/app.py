@@ -45,7 +45,14 @@ def sb_get(table, params=''):
 
 def get_statarb_data():
     """Récupère toutes les données StatArb (equity, trades, stats)"""
-    equity_raw = sb_get('live_equity', 'order=id.asc&limit=500')
+    # order=id.desc + limit → les N lignes les PLUS RÉCENTES, puis on
+    # remet en ordre chronologique pour le graphique. L'ancienne requête
+    # (order=id.asc&limit=500) restait figée sur les 500 premières lignes
+    # depuis le tout début dès que la table dépassait 500 lignes — le
+    # graphique n'avançait plus jamais.
+    # StatArb logue à chaque scan (15min) → 3000 points ≈ 31 jours d'historique.
+    equity_raw = sb_get('live_equity', 'order=id.desc&limit=3000')
+    equity_raw = list(reversed(equity_raw))
     trades     = sb_get('live_trades', 'order=id.desc&limit=20')
 
     all_exits = sb_get('live_trades', 'action=eq.EXIT&order=id.desc&limit=500')
@@ -84,7 +91,10 @@ def get_statarb_data():
 
 def get_funding_data():
     """Récupère toutes les données Funding Carry (equity, trades, stats)"""
-    equity_raw = sb_get('funding_equity', 'order=id.asc&limit=500')
+    # Même fix que StatArb — Funding logue moins souvent (cycles 8h),
+    # 3000 points couvre largement plusieurs mois dans ce cas.
+    equity_raw = sb_get('funding_equity', 'order=id.desc&limit=3000')
+    equity_raw = list(reversed(equity_raw))
     trades     = sb_get('funding_trades', 'order=id.desc&limit=20')
 
     all_exits = sb_get('funding_trades', 'action=eq.EXIT&order=id.desc&limit=500')
