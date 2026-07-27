@@ -65,12 +65,17 @@ def get_statarb_data():
     loss_trades = [p for p in pnl_list if p <= 0]
 
     stats = {
-        'total_trades': len(pnl_list),
-        'win_rate'    : round(len(wins) / len(pnl_list) * 100, 1) if pnl_list else 0,
-        'total_pnl'   : round(sum(pnl_list) * 100, 2) if pnl_list else 0,
-        'avg_pnl'     : round(sum(pnl_list) / len(pnl_list) * 100, 3) if pnl_list else 0,
-        'win_count'   : len(win_trades),
-        'loss_count'  : len(loss_trades),
+        'total_trades'    : len(pnl_list),
+        'win_rate'        : round(len(wins) / len(pnl_list) * 100, 1) if pnl_list else 0,
+        # Somme des rendements % de chaque trade, calculés sur le notionnel
+        # exposé par trade (~$100 : 50$ AAVE + 50$ ETH) — PAS sur le capital
+        # total du compte. Utile pour juger la qualité de la stratégie
+        # indépendamment de la taille du compte, mais ne pas confondre avec
+        # le rendement réel du portefeuille (voir 'portfolio_return_pct').
+        'cumulative_trade_pnl': round(sum(pnl_list) * 100, 2) if pnl_list else 0,
+        'avg_pnl'         : round(sum(pnl_list) / len(pnl_list) * 100, 3) if pnl_list else 0,
+        'win_count'       : len(win_trades),
+        'loss_count'      : len(loss_trades),
     }
 
     current = equity_raw[-1] if equity_raw else {
@@ -82,6 +87,15 @@ def get_statarb_data():
         ts = e.get('timestamp', '')
         chart_labels.append(ts[5:16] if len(ts) > 15 else ts)
         chart_values.append(round(e.get('equity_usdt', 0), 2))
+
+    # Vrai rendement du portefeuille : évolution du capital réel sur la
+    # fenêtre affichée, pas la somme des % individuels par trade.
+    if len(chart_values) >= 2 and chart_values[0]:
+        stats['portfolio_return_pct'] = round(
+            (chart_values[-1] - chart_values[0]) / chart_values[0] * 100, 3
+        )
+    else:
+        stats['portfolio_return_pct'] = 0.0
 
     return {
         'trades': trades, 'stats': stats, 'current': current,

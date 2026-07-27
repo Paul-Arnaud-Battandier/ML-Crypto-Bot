@@ -180,7 +180,7 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
   <div style="margin-bottom:36px">
     <h1 style="font-size:26px">Paul Arnaud-Battandier</h1>
     <p style="color:var(--dim);font-size:14.5px;margin-top:6px">Major in Finance &amp; Quantitative Engineering · ECE Paris</p>
-    <p style="color:var(--amber);font-size:14px;margin-top:8px;font-weight:500">Seeking an end-of-studies internship · Jan 2027 · Trading or Quantitative Research</p>
+    <p style="color:var(--amber);font-size:14px;margin-top:8px;font-weight:500">Seeking an end-of-studies internship · Jan/Feb 2027 · Trading or Quantitative Research</p>
     <div class="about-links">
       <a class="link-btn" href="https://www.linkedin.com/in/paul-arnaud-battandier/" target="_blank">LinkedIn</a>
       <a class="link-btn" href="https://github.com/Paul-Arnaud-Battandier" target="_blank">GitHub</a>
@@ -231,9 +231,9 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
       <div class="stat-sub">StatArb + Funding Carry</div>
     </div>
     <div class="stat">
-      <div class="stat-label">StatArb P&amp;L</div>
-      <div class="stat-value {% if statarb.stats.total_pnl > 0 %}up{% elif statarb.stats.total_pnl < 0 %}down{% else %}neu{% endif %}">
-        {% if statarb.stats.total_pnl > 0 %}+{% endif %}{{ "%.2f"|format(statarb.stats.total_pnl) }}%
+      <div class="stat-label">StatArb Return</div>
+      <div class="stat-value {% if statarb.stats.portfolio_return_pct > 0 %}up{% elif statarb.stats.portfolio_return_pct < 0 %}down{% else %}neu{% endif %}">
+        {% if statarb.stats.portfolio_return_pct > 0 %}+{% endif %}{{ "%.3f"|format(statarb.stats.portfolio_return_pct) }}%
       </div>
       <div class="stat-sub">{{ statarb.stats.total_trades }} closed trades</div>
     </div>
@@ -308,14 +308,19 @@ footer p{font-family:var(--font-mono);font-size:11px;color:var(--dim-2)}
     <div class="stat">
       <div class="stat-label">Capital</div>
       <div class="stat-value">${{ "%.2f"|format(statarb.current.equity_usdt or 0) }}</div>
-      <div class="stat-sub"><span class="badge" style="border-color:var(--line)">{{ statarb.current.position_status or 'FLAT' }}</span></div>
+      <div class="stat-sub">
+        <span class="badge" style="border-color:var(--line)">{{ statarb.current.position_status or 'FLAT' }}</span>
+        <span class="{% if statarb.stats.portfolio_return_pct > 0 %}up{% elif statarb.stats.portfolio_return_pct < 0 %}down{% else %}neu{% endif %}" style="margin-left:6px">
+          {% if statarb.stats.portfolio_return_pct > 0 %}+{% endif %}{{ "%.3f"|format(statarb.stats.portfolio_return_pct) }}%
+        </span>
+      </div>
     </div>
     <div class="stat">
-      <div class="stat-label">P&amp;L Total</div>
-      <div class="stat-value {% if statarb.stats.total_pnl > 0 %}up{% elif statarb.stats.total_pnl < 0 %}down{% else %}neu{% endif %}">
-        {% if statarb.stats.total_pnl > 0 %}+{% endif %}{{ "%.2f"|format(statarb.stats.total_pnl) }}%
+      <div class="stat-label">Cumulative Trade P&amp;L</div>
+      <div class="stat-value {% if statarb.stats.cumulative_trade_pnl > 0 %}up{% elif statarb.stats.cumulative_trade_pnl < 0 %}down{% else %}neu{% endif %}">
+        {% if statarb.stats.cumulative_trade_pnl > 0 %}+{% endif %}{{ "%.2f"|format(statarb.stats.cumulative_trade_pnl) }}%
       </div>
-      <div class="stat-sub">avg {{ "%.3f"|format(statarb.stats.avg_pnl) }}% / trade</div>
+      <div class="stat-sub">avg {{ "%.3f"|format(statarb.stats.avg_pnl) }}% / trade · % of $100 notional</div>
     </div>
     <div class="stat">
       <div class="stat-label">Win Rate</div>
