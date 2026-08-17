@@ -43,19 +43,54 @@ def sb_get(table, params=''):
         return []
 
 
+def sb_get_all(table, params='', batch_size=1000):
+    """
+    Comme sb_get, mais pagine automatiquement via l'en-tête Range pour
+    récupérer TOUTE la table, quelle que soit sa taille — plus de plafond
+    fixe (ex: limit=3000) qui coupait l'historique aux N dernières lignes.
+    Utilisé pour l'equity curve : on veut le tracé complet depuis la toute
+    première position prise par le bot, pas juste les derniers mois.
+    """
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return []
+    all_rows = []
+    offset = 0
+    while True:
+        try:
+            r = requests.get(
+                f"{SUPABASE_URL}/rest/v1/{table}?{params}",
+                headers={
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': f'Bearer {SUPABASE_KEY}',
+                    'Range': f'{offset}-{offset + batch_size - 1}',
+                },
+                timeout=15
+            )
+        except Exception as e:
+            print(f"Supabase error: {e}")
+            break
+        if r.status_code not in (200, 206):
+            break
+        batch = r.json()
+        if not batch:
+            break
+        all_rows.extend(batch)
+        if len(batch) < batch_size:
+            break  # dernier lot -> on a tout récupéré
+        offset += batch_size
+    return all_rows
+
+
 def get_statarb_data():
     """Récupère toutes les données StatArb (equity, trades, stats)"""
-    # order=id.desc + limit → les N lignes les PLUS RÉCENTES, puis on
-    # remet en ordre chronologique pour le graphique. L'ancienne requête
-    # (order=id.asc&limit=500) restait figée sur les 500 premières lignes
-    # depuis le tout début dès que la table dépassait 500 lignes — le
-    # graphique n'avançait plus jamais.
-    # StatArb logue à chaque scan (15min) → 3000 points ≈ 31 jours d'historique.
-    equity_raw = sb_get('live_equity', 'order=id.desc&limit=3000')
-    equity_raw = list(reversed(equity_raw))
+    # Historique complet depuis la toute première position du bot, pas
+    # juste les N derniers points : order=id.asc + pagination automatique
+    # (sb_get_all) pour ne jamais couper la courbe, quelle que soit la
+    # taille de la table.
+    equity_raw = sb_get_all('live_equity', 'order=id.asc')
     trades     = sb_get('live_trades', 'order=id.desc&limit=20')
 
-    all_exits = sb_get('live_trades', 'action=eq.EXIT&order=id.desc&limit=500')
+    all_exits = sb_get_all('live_trades', 'action=eq.EXIT&order=id.asc')
     pnl_list  = [t['pnl_pct'] for t in all_exits if t.get('pnl_pct') is not None]
     wins      = [p for p in pnl_list if p > 0]
     # Wins/Losses basés sur le vrai P&L, pas sur le nom du déclencheur de sortie —
@@ -105,13 +140,12 @@ def get_statarb_data():
 
 def get_funding_data():
     """Récupère toutes les données Funding Carry (equity, trades, stats)"""
-    # Même fix que StatArb — Funding logue moins souvent (cycles 8h),
-    # 3000 points couvre largement plusieurs mois dans ce cas.
-    equity_raw = sb_get('funding_equity', 'order=id.desc&limit=3000')
-    equity_raw = list(reversed(equity_raw))
+    # Même fix que StatArb : historique complet depuis la première position,
+    # via pagination automatique plutôt qu'un plafond fixe.
+    equity_raw = sb_get_all('funding_equity', 'order=id.asc')
     trades     = sb_get('funding_trades', 'order=id.desc&limit=20')
 
-    all_exits = sb_get('funding_trades', 'action=eq.EXIT&order=id.desc&limit=500')
+    all_exits = sb_get_all('funding_trades', 'action=eq.EXIT&order=id.asc')
     total_funding_list = [t['total_funding_collected_usd'] for t in all_exits
                            if t.get('total_funding_collected_usd') is not None]
 

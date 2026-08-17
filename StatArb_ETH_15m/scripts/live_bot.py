@@ -33,7 +33,11 @@ API_KEY = os.getenv('API_KEY')
 API_SECRET = os.getenv('API_SECRET')
 
 # --- Paramètres de Trading ---
-TRADE_AMOUNT_USD = 50.0
+CAPITAL_ALLOCATION_PCT = 0.02  # 2% du capital total = notionnel TOTAL engagé par trade
+                                # (réparti sur les 2 pattes : 1% AAVE + 1% ETH)
+MIN_TRADE_USD    = 10.0        # Plancher de sécurité : évite un ordre rejeté par Binance
+                                # si le compte est petit (min notional exchange). À ajuster
+                                # si besoin selon le minNotional réel de AAVE/USDT et ETH/USDT.
 THRESHOLD_ML     = 0.60
 WINDOW           = 200
 SL_ZSCORE        = 6.0    # Stop-Loss : fermeture forcée si Z s'écarte trop
@@ -234,8 +238,12 @@ def get_current_features(df):
 
 def compute_unrealized_pnl(position, direction,
                             entry_price_aave, entry_price_eth,
-                            current_aave, current_eth):
-    """Calcule le PnL latent de la position ouverte"""
+                            current_aave, current_eth,
+                            trade_amount_usd):
+    """Calcule le PnL latent de la position ouverte.
+    trade_amount_usd = notionnel PAR PATTE au moment de l'entrée (dérivé du
+    capital réel à ce moment-là, pas une constante fixe) — nécessaire pour
+    convertir le PnL % en USD affiché sur le dashboard."""
     if position == "FLAT":
         return 0.0, 0.0
 
@@ -247,20 +255,33 @@ def compute_unrealized_pnl(position, direction,
         ret_eth  = -ret_eth
 
     gross_pnl_pct = (ret_aave + ret_eth) / 2
-    pnl_usdt = TRADE_AMOUNT_USD * gross_pnl_pct
+    pnl_usdt = trade_amount_usd * gross_pnl_pct
     return pnl_usdt, gross_pnl_pct
 
 def execute_trade(exchange, direction, current_prices, zscore, ml_prob,
                   pos_aave_size=0, pos_eth_size=0,
                   entry_price_aave=0, entry_price_eth=0,
                   entry_candle=0, current_candle=0,
-                  hedge_ratio=None, spread_value=None, exit_reason=None):
+                  hedge_ratio=None, spread_value=None, exit_reason=None,
+                  trade_amount_usd=None):
 
     aave_price = current_prices['AAVE']
     eth_price  = current_prices['ETH']
 
-    aave_size = round(TRADE_AMOUNT_USD / aave_price, 1)
-    eth_size  = round(TRADE_AMOUNT_USD / eth_price, 3)
+    if direction in ("ENTRY_LONG_SPREAD", "ENTRY_SHORT_SPREAD"):
+        # trade_amount_usd = notionnel PAR PATTE, calculé par l'appelant
+        # comme (capital_actuel * CAPITAL_ALLOCATION_PCT) / 2, avec un
+        # plancher MIN_TRADE_USD pour ne jamais tomber sous le min notional
+        # de l'exchange.
+        if trade_amount_usd is None:
+            trade_amount_usd = MIN_TRADE_USD
+        aave_size = round(trade_amount_usd / aave_price, 1)
+        eth_size  = round(trade_amount_usd / eth_price, 3)
+        print(f"💰 Notionnel/patte : {trade_amount_usd:.2f} USDT ({CAPITAL_ALLOCATION_PCT*100:.0f}% capital / 2)")
+    else:
+        # Sorties : on ferme exactement la taille ouverte à l'entrée.
+        aave_size = pos_aave_size
+        eth_size  = pos_eth_size
 
     print(f"💸 Tentative d'exécution : {direction}")
     print(f"   Tailles calculées -> AAVE: {aave_size} | ETH: {eth_size}")
@@ -500,11 +521,16 @@ def main():
                 aave_now     = current_state['AAVE']
                 eth_now      = current_state['ETH']
 
-                # Calcul PnL latent
+                # Calcul PnL latent — trade_amount_usd est dérivé de la taille
+                # réellement ouverte (pos_aave_size * prix d'entrée), donc reflète
+                # le capital qui était disponible AU MOMENT de l'entrée, pas le
+                # capital actuel (qui peut avoir bougé depuis).
+                open_trade_notional = pos_aave_size * entry_price_aave if position != "FLAT" else 0.0
                 upnl_usdt, upnl_pct = compute_unrealized_pnl(
                     position, direction_int,
                     entry_price_aave, entry_price_eth,
-                    aave_now, eth_now
+                    aave_now, eth_now,
+                    open_trade_notional
                 )
 
                 current_equity = log_equity(exchange, position, upnl_usdt, upnl_pct, num_trades_total)
@@ -613,11 +639,18 @@ def main():
                         if prob > THRESHOLD_ML:
                             dir_str = "ENTRY_LONG_SPREAD" if z <= -2.0 else "ENTRY_SHORT_SPREAD"
                             direction_int = 1 if z <= -2.0 else -1
+                            # 2% du capital actuel = notionnel total du trade,
+                            # réparti moitié-moitié entre les 2 pattes.
+                            trade_notional_per_leg = max(
+                                (current_equity or 0) * CAPITAL_ALLOCATION_PCT / 2,
+                                MIN_TRADE_USD
+                            )
                             position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
                                 exchange, dir_str,
                                 {'AAVE': aave_now, 'ETH': eth_now},
                                 z, prob,
-                                hedge_ratio=hedge_ratio, spread_value=spread_value
+                                hedge_ratio=hedge_ratio, spread_value=spread_value,
+                                trade_amount_usd=trade_notional_per_leg
                             )
                             if position != "FLAT":
                                 entry_candle = candle_count
