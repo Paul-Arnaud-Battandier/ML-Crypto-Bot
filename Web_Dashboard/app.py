@@ -14,12 +14,17 @@ app = Flask(__name__)
 SUPABASE_URL = os.getenv('SUPABASE_URL', '')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY', '')
 
-# ── Bots de trading : migrés vers GitHub Actions (cron) ─────────
-# StatArb (15min), Funding (8h) et leurs rescans respectifs tournent
-# maintenant en jobs GitHub Actions indépendants, plus dans ce process.
-# Render ne sert plus que ce dashboard — mémoire nettement sous les
-# 512MB puisqu'il n'y a plus de threads de fond, LightGBM/statsmodels
-# chargés en continu, ni de clients ccxt persistants ici.
+# ── Lancement des bots en arrière-plan ──────────────────────────
+# ⚠️ Mettre RUN_BACKGROUND_JOBS=true UNIQUEMENT sur Render.
+#    En local, laisser à false (ou absent) pour éviter un double bot
+#    si live_bot.py tourne déjà dans un terminal séparé.
+# StatArb/Funding tournent ici (pas sur GitHub Actions) car Binance
+# bloque les IP des runners GitHub (erreur 451) — Render fonctionne.
+# Chaque bot tourne en sous-processus isolé (voir background_jobs.py)
+# pour éviter l'accumulation mémoire qui causait les OOM précédents.
+if os.getenv('RUN_BACKGROUND_JOBS', 'false').lower() == 'true':
+    from background_jobs import start_background_jobs
+    start_background_jobs()
 
 
 def sb_get(table, params=''):
