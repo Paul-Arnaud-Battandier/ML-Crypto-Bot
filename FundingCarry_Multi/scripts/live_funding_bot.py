@@ -19,7 +19,6 @@ Différences clés vs StatArb :
 import ccxt
 import pandas as pd
 import numpy as np
-import json
 import csv
 import os
 import sys
@@ -34,19 +33,19 @@ load_dotenv()
 ROOT_DIR   = Path(__file__).parent.parent.parent   # ML_Crypto_Bot/
 sys.path.insert(0, str(ROOT_DIR))
 from config import PATHS
-from state_store import get_state
+from state_store import get_state, set_state
 
 CARRY_DIR  = ROOT_DIR / "FundingCarry_Multi" / "data"
 CARRY_DIR.mkdir(exist_ok=True)
 
 EQUITY_CSV = CARRY_DIR / "funding_equity.csv"
 TRADES_CSV = CARRY_DIR / "funding_trades.csv"
-STATE_JSON = CARRY_DIR / "funding_state.json"  # Persistance position entre redémarrages
-
-REGIME_JSON   = PATHS['regime_json']
-FUNDING_JSON  = ROOT_DIR / "FundingCarry_Multi" / "data" / ".." / ".." / \
-                "FundingCarry_Multi" / "data" / "best_funding.json"
-FUNDING_JSON  = ROOT_DIR / "FundingCarry_Multi" / "data" / "best_funding.json"
+STATE_KEY  = "funding_bot_state"  # clé dans la table Supabase bot_state —
+                                   # remplace l'ancien funding_state.json local,
+                                   # qui ne survivait pas aux redémarrages Render
+                                   # (filesystem éphémère) ni à un futur passage
+                                   # en cron GitHub Actions (machine neuve à
+                                   # chaque run).
 
 # ── Paramètres ────────────────────────────────────────────────
 TRADE_AMOUNT_USD     = 200.0    # $ par patte (200$ spot + 200$ perp = 400$ total)
@@ -148,26 +147,36 @@ def log_trade(action, symbol, spot_price, perp_price, funding_rate,
 
 
 # ── Persistance de la position (survie aux redémarrages) ──────
+# Migré du fichier JSON local vers Supabase (state_store) : le disque
+# Render est éphémère et un JSON local est perdu à chaque redémarrage
+# (OOM, redéploiement) — ce qui faisait perdre le tracking d'une
+# position réellement encore ouverte sur Binance, avec risque de
+# double-entrée au redémarrage suivant.
+_DEFAULT_STATE = {
+    'position': 'FLAT',
+    'symbol': None,
+    'entry_time': None,
+    'entry_spot_price': None,
+    'entry_perp_price': None,
+    'spot_size': None,
+    'perp_size': None,
+    'funding_payments': [],   # liste des funding rates collectés
+    'funding_collected_usd': 0.0,
+}
+
 def save_state(state: dict):
-    with open(STATE_JSON, 'w') as f:
-        json.dump(state, f, indent=2)
+    ok = set_state(STATE_KEY, state)
+    if not ok:
+        print("  ⚠️  Échec sauvegarde état position sur Supabase — "
+              "un crash maintenant ferait perdre le tracking de la position !")
 
 def load_state() -> dict:
-    try:
-        with open(STATE_JSON) as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {
-            'position': 'FLAT',
-            'symbol': None,
-            'entry_time': None,
-            'entry_spot_price': None,
-            'entry_perp_price': None,
-            'spot_size': None,
-            'perp_size': None,
-            'funding_payments': [],   # liste des funding rates collectés
-            'funding_collected_usd': 0.0,
-        }
+    state = get_state(STATE_KEY)
+    if state is None:
+        return dict(_DEFAULT_STATE)
+    # merge défensif : si de nouveaux champs sont ajoutés plus tard,
+    # un vieil état sauvegardé ne casse pas le bot avec un KeyError.
+    return {**_DEFAULT_STATE, **state}
 
 
 # ── Exchanges ─────────────────────────────────────────────────
@@ -305,10 +314,42 @@ def compute_unrealized_pnl(state, current_spot, current_perp):
     return spot_pnl + perp_pnl  # USD
 
 
+# ── Garde-fou : l'état Supabase correspond-il à la réalité Binance ? ──
+def sanity_check_position(perp_ex, state):
+    """
+    Compare l'état enregistré à ce qui existe réellement sur l'exchange.
+    Ne corrige RIEN automatiquement (on ne peut pas reconstruire le prix
+    d'entrée spot avec certitude après coup) — se contente d'alerter fort
+    dans les logs si un écart est détecté, pour investigation manuelle
+    plutôt qu'une action silencieuse potentiellement dangereuse (ex :
+    ouvrir une 2e position par-dessus une position déjà ouverte).
+    """
+    try:
+        positions = perp_ex.fetch_positions()
+        open_positions = [p for p in positions if float(p.get('contracts') or 0) != 0]
+    except Exception as e:
+        print(f"  ⚠️  Sanity check impossible (fetch_positions a échoué) : {e}")
+        return
+
+    if state['position'] == 'FLAT' and open_positions:
+        syms = ', '.join(p['symbol'] for p in open_positions)
+        print(f"  🚨 ALERTE : état = FLAT mais Binance montre une position ouverte "
+              f"sur [{syms}] ! Le state Supabase est probablement désynchronisé "
+              f"(ex : crash pendant une entrée). NE PAS laisser le bot entrer "
+              f"une nouvelle position tant que ce n'est pas résolu manuellement.")
+    elif state['position'] != 'FLAT':
+        match = any(p['symbol'] == state['symbol'] for p in open_positions)
+        if not match:
+            print(f"  🚨 ALERTE : état = position ouverte sur {state['symbol']} "
+                  f"mais Binance ne montre AUCUNE position correspondante ! "
+                  f"Elle a peut-être été fermée manuellement ou par un autre "
+                  f"process — le tracking funding/PnL de cette position sera faux.")
+
+
 # ── Main ──────────────────────────────────────────────────────
 def main():
     print("=" * 60)
-    print("💰 FUNDING RATE CARRY BOT (BINANCE DEMO)")
+    print("💰 FUNDING RATE CARRY BOT — CYCLE UNIQUE (BINANCE DEMO)")
     print(f"   Capital/patte : ${TRADE_AMOUNT_USD} | Frais RT : {ROUND_TRIP_FEE*100:.3f}%")
     print(f"   Exit trigger  : rolling {EXIT_ROLLING_PAYMENTS} paiements < {EXIT_THRESHOLD_PCT}%")
     print(f"   Max holding   : {MAX_HOLDING_DAYS} jours")
@@ -321,136 +362,139 @@ def main():
     print(f"✅ API connectée")
     print(f"📊 Position actuelle : {state['position']}"
           f"{(' — ' + state['symbol']) if state['symbol'] else ''}")
+    sanity_check_position(perp_ex, state)
 
-    while True:
-        try:
-            now = datetime.now()
-            # Check toutes les 8h (00, 08, 16 UTC) + 2 minutes de décalage
-            # pour être sûr que le paiement a été effectué
-            utc_hour = datetime.utcnow().hour
-            if utc_hour in (0, 8, 16) and now.minute == 2 and now.second < 30:
+    try:
+        now = datetime.now()
+        print(f"\n[{now.strftime('%Y-%m-%d %H:%M:%S')}] ⏰ Cycle de paiement de funding")
 
-                print(f"\n[{now.strftime('%Y-%m-%d %H:%M:%S')}] ⏰ Cycle de paiement de funding")
+        regime = read_regime()
+        best   = read_best_funding()
 
-                regime = read_regime()
-                best   = read_best_funding()
+        # ── EN POSITION ───────────────────────────────
+        if state['position'] == 'LONG_SPOT_SHORT_PERP':
+            sym = state['symbol']
+            spot_price, perp_price = get_prices(spot_ex, perp_ex, sym)
+            current_fr = get_current_funding_rate(perp_ex, sym)
 
-                # ── EN POSITION ───────────────────────────────
-                if state['position'] == 'LONG_SPOT_SHORT_PERP':
-                    sym = state['symbol']
-                    spot_price, perp_price = get_prices(spot_ex, perp_ex, sym)
-                    current_fr = get_current_funding_rate(perp_ex, sym)
+            # Funding collecté ce cycle
+            funding_usd = current_fr * TRADE_AMOUNT_USD
+            state['funding_payments'].append(current_fr * 100)
+            state['funding_collected_usd'] += funding_usd
+            save_state(state)  # checkpoint à chaque cycle (8h) — plus
+                                # seulement à l'entrée/sortie, sinon un
+                                # crash en cours de détention faisait
+                                # perdre tous les paiements accumulés.
 
-                    # Funding collecté ce cycle
-                    funding_usd = current_fr * TRADE_AMOUNT_USD
-                    state['funding_payments'].append(current_fr * 100)
-                    state['funding_collected_usd'] += funding_usd
+            upnl = compute_unrealized_pnl(state, spot_price, perp_price)
+            days_held = (datetime.now() - datetime.fromisoformat(state['entry_time'])).days
 
-                    upnl = compute_unrealized_pnl(state, spot_price, perp_price)
-                    days_held = (datetime.now() - datetime.fromisoformat(state['entry_time'])).days
+            print(f"  📊 {sym} | Spot: ${spot_price:.2f} | Perp: ${perp_price:.2f}")
+            print(f"  💰 Funding ce cycle  : {current_fr*100:+.4f}% (${funding_usd:+.4f})")
+            print(f"  💰 Funding cumulé    : ${state['funding_collected_usd']:+.4f}")
+            print(f"  📈 PnL latent (basis): ${upnl:+.4f}")
+            print(f"  ⏱️  Durée             : {days_held}j")
 
-                    print(f"  📊 {sym} | Spot: ${spot_price:.2f} | Perp: ${perp_price:.2f}")
-                    print(f"  💰 Funding ce cycle  : {current_fr*100:+.4f}% (${funding_usd:+.4f})")
-                    print(f"  💰 Funding cumulé    : ${state['funding_collected_usd']:+.4f}")
-                    print(f"  📈 PnL latent (basis): ${upnl:+.4f}")
-                    print(f"  ⏱️  Durée             : {days_held}j")
+            # Log equity
+            log_equity(
+                equity=5000 + state['funding_collected_usd'] + upnl,
+                position=state['position'],
+                symbol=sym,
+                funding_collected=state['funding_collected_usd'],
+                unrealized_pnl=upnl,
+            )
 
-                    # Log equity
-                    log_equity(
-                        equity=5000 + state['funding_collected_usd'] + upnl,
-                        position=state['position'],
-                        symbol=sym,
-                        funding_collected=state['funding_collected_usd'],
-                        unrealized_pnl=upnl,
-                    )
+            # Vérification sortie
+            exit_flag, exit_reason = should_exit(state, current_fr)
+            if exit_flag:
+                print(f"\n  🚪 SORTIE : {exit_reason}")
+                exit_position(spot_ex, perp_ex, state)
+                log_trade("EXIT", sym, spot_price, perp_price, current_fr,
+                          exit_reason=exit_reason,
+                          total_funding=state['funding_collected_usd'])
+                total_collected = state['funding_collected_usd']
+                state = dict(_DEFAULT_STATE)  # reset propre, pas de
+                                               # rechargement d'un état
+                                               # potentiellement périmé
+                save_state(state)
+                print(f"  ✅ Position fermée. Funding total collecté : ${total_collected:.4f}")
 
-                    # Vérification sortie
-                    exit_flag, exit_reason = should_exit(state, current_fr)
-                    if exit_flag:
-                        print(f"\n  🚪 SORTIE : {exit_reason}")
-                        exit_position(spot_ex, perp_ex, state)
-                        log_trade("EXIT", sym, spot_price, perp_price, current_fr,
-                                  exit_reason=exit_reason,
-                                  total_funding=state['funding_collected_usd'])
-                        state = load_state()  # reset
-                        state['position'] = 'FLAT'
-                        save_state(state)
-                        print(f"  ✅ Position fermée. Funding total collecté : ${state.get('funding_collected_usd', 0):.4f}")
+        # ── PAS EN POSITION ───────────────────────────
+        elif state['position'] == 'FLAT':
+            # Log équité même en FLAT pour que le dashboard ne soit pas vide
+            log_equity(
+                equity=5000 + state.get('funding_collected_usd', 0.0),
+                position='FLAT',
+                symbol=None,
+                funding_collected=state.get('funding_collected_usd', 0.0),
+                unrealized_pnl=0.0,
+            )
 
-                # ── PAS EN POSITION ───────────────────────────
-                elif state['position'] == 'FLAT':
-                    # Log équité même en FLAT pour que le dashboard ne soit pas vide
-                    log_equity(
-                        equity=5000 + state.get('funding_collected_usd', 0.0),
-                        position='FLAT',
-                        symbol=None,
-                        funding_collected=state.get('funding_collected_usd', 0.0),
-                        unrealized_pnl=0.0,
-                    )
+            # Vérification régime
+            if regime:
+                r = regime['regime']
+                if regime['strategies'].get('funding_carry') != True:
+                    print(f"  🚫 Funding carry désactivé (régime {r})")
+                    log_trade("REJECTED_REGIME", best['symbol'] if best else None,
+                              0, 0, 0, exit_reason=f"regime={r}")
+                    print("✅ Cycle terminé.")
+                    return
 
-                    # Vérification régime
-                    if regime:
-                        r = regime['regime']
-                        if regime['strategies'].get('funding_carry') != True:
-                            print(f"  🚫 Funding carry désactivé (régime {r})")
-                            log_trade("REJECTED_REGIME", best['symbol'] if best else None,
-                                      0, 0, 0, exit_reason=f"regime={r}")
-                            time.sleep(60)
-                            continue
+            # Vérification paire
+            if not best or not best.get('valid'):
+                print("  🚫 Aucune opportunité valide — APR insuffisant")
+                log_trade("REJECTED_NO_PAIR", best['symbol'] if best else None,
+                          0, 0, 0, exit_reason="no_valid_opportunity")
+                print("✅ Cycle terminé.")
+                return
 
-                    # Vérification paire
-                    if not best or not best.get('valid'):
-                        print("  🚫 Aucune opportunité valide — APR insuffisant")
-                        log_trade("REJECTED_NO_PAIR", best['symbol'] if best else None,
-                                  0, 0, 0, exit_reason="no_valid_opportunity")
-                        time.sleep(60)
-                        continue
+            sym = best['symbol']
+            spot_price, perp_price = get_prices(spot_ex, perp_ex, sym)
+            current_fr = get_current_funding_rate(perp_ex, sym)
+            current_apr = current_fr * 3 * 365 * 100
 
-                    sym = best['symbol']
-                    spot_price, perp_price = get_prices(spot_ex, perp_ex, sym)
-                    current_fr = get_current_funding_rate(perp_ex, sym)
-                    current_apr = current_fr * 3 * 365 * 100
+            print(f"  📊 Opportunité : {sym}")
+            print(f"     APR actuel  : {current_apr:.2f}%")
+            print(f"     APR 30j     : {best['apr_30d']}%")
+            print(f"     Breakeven   : {best['breakeven_days']} jours")
 
-                    print(f"  📊 Opportunité : {sym}")
-                    print(f"     APR actuel  : {current_apr:.2f}%")
-                    print(f"     APR 30j     : {best['apr_30d']}%")
-                    print(f"     Breakeven   : {best['breakeven_days']} jours")
+            # Entrée seulement si le funding actuel est positif
+            if current_fr <= 0:
+                print(f"  🚫 Funding actuel négatif ({current_fr*100:.4f}%) — on attend")
+                log_trade("REJECTED_NEG_FUNDING", sym, spot_price, perp_price,
+                          current_fr, exit_reason="funding_rate<=0")
+                print("✅ Cycle terminé.")
+                return
 
-                    # Entrée seulement si le funding actuel est positif
-                    if current_fr <= 0:
-                        print(f"  🚫 Funding actuel négatif ({current_fr*100:.4f}%) — on attend")
-                        log_trade("REJECTED_NEG_FUNDING", sym, spot_price, perp_price,
-                                  current_fr, exit_reason="funding_rate<=0")
-                        time.sleep(60)
-                        continue
+            print(f"\n  🚀 ENTRÉE Long Spot + Short Perp sur {sym}")
+            result = enter_position(spot_ex, perp_ex, sym, spot_price, perp_price)
 
-                    print(f"\n  🚀 ENTRÉE Long Spot + Short Perp sur {sym}")
-                    result = enter_position(spot_ex, perp_ex, sym, spot_price, perp_price)
+            if result:
+                spot_size, perp_size = result
+                log_trade("ENTRY", sym, spot_price, perp_price, current_fr)
+                state = {
+                    'position'          : 'LONG_SPOT_SHORT_PERP',
+                    'symbol'            : sym,
+                    'entry_time'        : datetime.now().isoformat(),
+                    'entry_spot_price'  : spot_price,
+                    'entry_perp_price'  : perp_price,
+                    'spot_size'         : spot_size,
+                    'perp_size'         : perp_size,
+                    'funding_payments'  : [current_fr * 100],
+                    'funding_collected_usd': current_fr * TRADE_AMOUNT_USD,
+                }
+                save_state(state)
+                print(f"  ✅ Position ouverte. Prochain check dans 8h.")
 
-                    if result:
-                        spot_size, perp_size = result
-                        log_trade("ENTRY", sym, spot_price, perp_price, current_fr)
-                        state = {
-                            'position'          : 'LONG_SPOT_SHORT_PERP',
-                            'symbol'            : sym,
-                            'entry_time'        : datetime.now().isoformat(),
-                            'entry_spot_price'  : spot_price,
-                            'entry_perp_price'  : perp_price,
-                            'spot_size'         : spot_size,
-                            'perp_size'         : perp_size,
-                            'funding_payments'  : [current_fr * 100],
-                            'funding_collected_usd': current_fr * TRADE_AMOUNT_USD,
-                        }
-                        save_state(state)
-                        print(f"  ✅ Position ouverte. Prochain check dans 8h.")
+        print("✅ Cycle terminé.")
 
-                time.sleep(30)
-            else:
-                time.sleep(20)
+    except Exception as e:
+        print(f"❌ Erreur : {e}")
+        sys.exit(1)  # code de sortie non-zéro → run GitHub Actions visible en échec
 
-        except Exception as e:
-            print(f"❌ Erreur : {e}")
-            time.sleep(30)
+
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":

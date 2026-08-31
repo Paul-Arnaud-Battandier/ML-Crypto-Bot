@@ -15,7 +15,13 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent.parent.parent  # ML_Crypto_Bot/
 sys.path.insert(0, str(ROOT_DIR))
 from config import PATHS
-from state_store import get_state
+from state_store import get_state, set_state
+
+STATARB_STATE_KEY = "statarb_entry_time"  # persiste l'heure d'entrée réelle,
+                                            # utilisée pour le stop-loss temporel
+                                            # (remplace l'ancien compteur de
+                                            # bougies en mémoire qui se
+                                            # réinitialisait à chaque redémarrage)
 
 # --- Chemins (centralisés dans config.py) ---
 DATA_DIR = PATHS['statarb_data']
@@ -454,7 +460,7 @@ def recover_position(exchange):
 
 def main():
     print("="*60)
-    print("🟢 STAT-ARB BOT EN LIGNE (BINANCE DEMO)")
+    print("🟢 STAT-ARB BOT — SCAN UNIQUE (BINANCE DEMO)")
     print("="*60)
 
     init_csv()
@@ -469,7 +475,6 @@ def main():
     regime    = read_regime()
     best_pair = read_best_pair()
 
-    # Sélection de la paire (best_pair si valide, sinon défaut)
     if best_pair and best_pair.get('valid'):
         SYM1 = best_pair['sym1']
         SYM2 = best_pair['sym2']
@@ -478,195 +483,181 @@ def main():
         SYM1, SYM2 = DEFAULT_SYM1, DEFAULT_SYM2
         print(f"📊 Paire par défaut   : {SYM1} / {SYM2}")
 
-    # Vérification régime initial
     if regime:
         emoji = {'MEAN_REV':'🟢','TRENDING':'🟡','HIGH_VOL':'🔴','NEUTRAL':'⚪'}
         r = regime['regime']
         print(f"🎯 Régime actuel      : {emoji.get(r,'⚪')} {r} "
               f"({'stat arb ✅' if regime['strategies']['stat_arb'] else 'stat arb ❌'})")
 
-    # Récupération automatique de la position si redémarrage en cours de trade
+    # Récupération automatique de la position (source de vérité = Binance)
     position, direction_int, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = recover_position(exchange)
 
-    entry_candle     = 0
-    candle_count     = 0
-    num_trades_total = 0
-    last_regime_check = datetime.now()  # Pour refresh horaire
+    # Heure d'entrée réelle, persistée sur Supabase — remplace l'ancien
+    # compteur de bougies (candle_count - entry_candle) qui se remettait à
+    # zéro à chaque redémarrage du process et faussait le stop-loss 48h.
+    entry_time = None
+    if position != "FLAT":
+        stored = get_state(STATARB_STATE_KEY)
+        if stored and stored.get('entry_time'):
+            entry_time = datetime.fromisoformat(stored['entry_time'])
+        else:
+            print("⚠️  Position ouverte détectée mais aucune heure d'entrée en "
+                  "mémoire Supabase — le stop-loss 48h redémarre son horloge "
+                  "maintenant par sécurité (mieux vaut sous-estimer la durée "
+                  "que fermer une position par erreur). Vérifie manuellement "
+                  "si cette position dure depuis longtemps.")
+            entry_time = datetime.now()
+            set_state(STATARB_STATE_KEY, {'entry_time': entry_time.isoformat()})
 
-    while True:
-        try:
-            now = datetime.now()
-            if now.minute % 15 == 0 and now.second < 10:
-                print(f"\n[{now.strftime('%H:%M:%S')}] 🔄 Scan du marché...")
-                candle_count += 1
+    now = datetime.now()
+    print(f"\n[{now.strftime('%H:%M:%S')}] 🔄 Scan du marché...")
 
-                # Refresh régime toutes les heures
-                if (datetime.now() - last_regime_check).total_seconds() >= 3600:
-                    regime = read_regime()
-                    best_pair = read_best_pair()
-                    if best_pair and best_pair.get('valid'):
-                        SYM1 = best_pair['sym1']
-                        SYM2 = best_pair['sym2']
-                    last_regime_check = datetime.now()
-                    if regime:
-                        emoji = {'MEAN_REV':'🟢','TRENDING':'🟡','HIGH_VOL':'🔴','NEUTRAL':'⚪'}
-                        r = regime['regime']
-                        print(f"  🎯 Régime : {emoji.get(r,'⚪')} {r}")
+    try:
+        df = fetch_latest_data(exchange)
+        current_state = get_current_features(df)
+        z            = current_state['zscore']
+        hedge_ratio  = current_state['ratio']
+        spread_value = current_state['spread']
+        aave_now     = current_state['AAVE']
+        eth_now      = current_state['ETH']
 
-                df = fetch_latest_data(exchange)
-                current_state = get_current_features(df)
-                z            = current_state['zscore']
-                hedge_ratio  = current_state['ratio']
-                spread_value = current_state['spread']
-                aave_now     = current_state['AAVE']
-                eth_now      = current_state['ETH']
+        open_trade_notional = pos_aave_size * entry_price_aave if position != "FLAT" else 0.0
+        upnl_usdt, upnl_pct = compute_unrealized_pnl(
+            position, direction_int,
+            entry_price_aave, entry_price_eth,
+            aave_now, eth_now,
+            open_trade_notional
+        )
 
-                # Calcul PnL latent — trade_amount_usd est dérivé de la taille
-                # réellement ouverte (pos_aave_size * prix d'entrée), donc reflète
-                # le capital qui était disponible AU MOMENT de l'entrée, pas le
-                # capital actuel (qui peut avoir bougé depuis).
-                open_trade_notional = pos_aave_size * entry_price_aave if position != "FLAT" else 0.0
-                upnl_usdt, upnl_pct = compute_unrealized_pnl(
-                    position, direction_int,
+        current_equity = log_equity(exchange, position, upnl_usdt, upnl_pct, 0)
+
+        if np.isnan(z):
+            print("⚠️ Z-Score NaN — pas assez de données, scan suivant dans 15 min.")
+            return
+
+        print(f"📊 Z-Score : {z:.2f} | Capital : {current_equity:.2f} USDT | PnL latent : {upnl_pct*100:+.3f}%")
+
+        # Durée de la position en bougies de 15min, basée sur un vrai
+        # timestamp — fiable même après un redémarrage entre deux scans.
+        candles_in_trade = int((now - entry_time).total_seconds() // 900) if entry_time else 0
+
+        if position == "LONG_SPREAD":
+            if candles_in_trade >= TIME_LIMIT:
+                print(f"⏰ BARRIÈRE TEMPORELLE ({candles_in_trade} bougies = {candles_in_trade*15//60}h). Fermeture forcée.")
+                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                    exchange, "EXIT_LONG_SPREAD",
+                    {'AAVE': aave_now, 'ETH': eth_now},
+                    z, 0, pos_aave_size, pos_eth_size,
                     entry_price_aave, entry_price_eth,
-                    aave_now, eth_now,
-                    open_trade_notional
+                    0, candles_in_trade,
+                    hedge_ratio, spread_value, exit_reason="TIME_LIMIT"
                 )
+                set_state(STATARB_STATE_KEY, {'entry_time': None})
+            elif z <= -SL_ZSCORE or upnl_pct <= SL_PNL:
+                reason = "STOP_LOSS_Z" if z <= -SL_ZSCORE else "STOP_LOSS_PNL"
+                print(f"🛑 STOP-LOSS DÉCLENCHÉ ({reason} | Z={z:.2f} | PnL={upnl_pct*100:.2f}%). Fermeture forcée.")
+                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                    exchange, "EXIT_LONG_SPREAD",
+                    {'AAVE': aave_now, 'ETH': eth_now},
+                    z, 0, pos_aave_size, pos_eth_size,
+                    entry_price_aave, entry_price_eth,
+                    0, candles_in_trade,
+                    hedge_ratio, spread_value, exit_reason=reason
+                )
+                set_state(STATARB_STATE_KEY, {'entry_time': None})
+            elif z >= 0:
+                print("🎯 Take Profit (Z >= 0). Fermeture du Long Spread.")
+                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                    exchange, "EXIT_LONG_SPREAD",
+                    {'AAVE': aave_now, 'ETH': eth_now},
+                    z, 0, pos_aave_size, pos_eth_size,
+                    entry_price_aave, entry_price_eth,
+                    0, candles_in_trade,
+                    hedge_ratio, spread_value, exit_reason="SIGNAL_EXIT"
+                )
+                set_state(STATARB_STATE_KEY, {'entry_time': None})
 
-                current_equity = log_equity(exchange, position, upnl_usdt, upnl_pct, num_trades_total)
+        elif position == "SHORT_SPREAD":
+            if candles_in_trade >= TIME_LIMIT:
+                print(f"⏰ BARRIÈRE TEMPORELLE ({candles_in_trade} bougies = {candles_in_trade*15//60}h). Fermeture forcée.")
+                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                    exchange, "EXIT_SHORT_SPREAD",
+                    {'AAVE': aave_now, 'ETH': eth_now},
+                    z, 0, pos_aave_size, pos_eth_size,
+                    entry_price_aave, entry_price_eth,
+                    0, candles_in_trade,
+                    hedge_ratio, spread_value, exit_reason="TIME_LIMIT"
+                )
+                set_state(STATARB_STATE_KEY, {'entry_time': None})
+            elif z >= SL_ZSCORE or upnl_pct <= SL_PNL:
+                reason = "STOP_LOSS_Z" if z >= SL_ZSCORE else "STOP_LOSS_PNL"
+                print(f"🛑 STOP-LOSS DÉCLENCHÉ ({reason} | Z={z:.2f} | PnL={upnl_pct*100:.2f}%). Fermeture forcée.")
+                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                    exchange, "EXIT_SHORT_SPREAD",
+                    {'AAVE': aave_now, 'ETH': eth_now},
+                    z, 0, pos_aave_size, pos_eth_size,
+                    entry_price_aave, entry_price_eth,
+                    0, candles_in_trade,
+                    hedge_ratio, spread_value, exit_reason=reason
+                )
+                set_state(STATARB_STATE_KEY, {'entry_time': None})
+            elif z <= 0:
+                print("🎯 Take Profit (Z <= 0). Fermeture du Short Spread.")
+                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                    exchange, "EXIT_SHORT_SPREAD",
+                    {'AAVE': aave_now, 'ETH': eth_now},
+                    z, 0, pos_aave_size, pos_eth_size,
+                    entry_price_aave, entry_price_eth,
+                    0, candles_in_trade,
+                    hedge_ratio, spread_value, exit_reason="SIGNAL_EXIT"
+                )
+                set_state(STATARB_STATE_KEY, {'entry_time': None})
 
-                if np.isnan(z):
-                    print("⚠️ Z-Score NaN — pas assez de données, on skip cette bougie.")
-                    time.sleep(60)
-                    continue
+        elif position == "FLAT":
+            if regime and not regime['strategies']['stat_arb']:
+                r = regime['regime']
+                print(f"  🚫 Stat arb désactivé (régime {r}) — aucune entrée.")
+            elif z <= -2.0 or z >= 2.0:
+                print("⚠️ Anomalie détectée ! Consultation du ML...")
 
-                print(f"📊 Z-Score : {z:.2f} | Capital : {current_equity:.2f} USDT | PnL latent : {upnl_pct*100:+.3f}%")
+                features = [
+                    current_state['zscore'],       current_state['zscore_mom_1h'],
+                    current_state['zscore_mom_4h'], current_state['aave_ret_1h'],
+                    current_state['eth_ret_1h'],   current_state['aave_vol_4h'],
+                    current_state['eth_vol_4h']
+                ]
 
-                # --- LOGIQUE DE SORTIE ---
-                candles_in_trade = candle_count - entry_candle
+                prob = model.predict_proba([features])[0][1]
+                print(f"🧠 Confiance ML : {prob*100:.2f}%")
 
-                if position == "LONG_SPREAD":
-                    if candles_in_trade >= TIME_LIMIT:
-                        print(f"⏰ BARRIÈRE TEMPORELLE ({candles_in_trade} bougies = {candles_in_trade*15//60}h). Fermeture forcée.")
-                        position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
-                            exchange, "EXIT_LONG_SPREAD",
-                            {'AAVE': aave_now, 'ETH': eth_now},
-                            z, 0, pos_aave_size, pos_eth_size,
-                            entry_price_aave, entry_price_eth,
-                            entry_candle, candle_count,
-                            hedge_ratio, spread_value, exit_reason="TIME_LIMIT"
-                        )
-                        direction_int = 0
-                    elif z <= -SL_ZSCORE or upnl_pct <= SL_PNL:
-                        reason = "STOP_LOSS_Z" if z <= -SL_ZSCORE else "STOP_LOSS_PNL"
-                        print(f"🛑 STOP-LOSS DÉCLENCHÉ ({reason} | Z={z:.2f} | PnL={upnl_pct*100:.2f}%). Fermeture forcée.")
-                        position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
-                            exchange, "EXIT_LONG_SPREAD",
-                            {'AAVE': aave_now, 'ETH': eth_now},
-                            z, 0, pos_aave_size, pos_eth_size,
-                            entry_price_aave, entry_price_eth,
-                            entry_candle, candle_count,
-                            hedge_ratio, spread_value, exit_reason=reason
-                        )
-                        direction_int = 0
-                    elif z >= 0:
-                        print("🎯 Take Profit (Z >= 0). Fermeture du Long Spread.")
-                        position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
-                            exchange, "EXIT_LONG_SPREAD",
-                            {'AAVE': aave_now, 'ETH': eth_now},
-                            z, 0, pos_aave_size, pos_eth_size,
-                            entry_price_aave, entry_price_eth,
-                            entry_candle, candle_count,
-                            hedge_ratio, spread_value, exit_reason="SIGNAL_EXIT"
-                        )
-                        direction_int = 0
+                if prob > THRESHOLD_ML:
+                    dir_str = "ENTRY_LONG_SPREAD" if z <= -2.0 else "ENTRY_SHORT_SPREAD"
+                    direction_int = 1 if z <= -2.0 else -1
+                    trade_notional_per_leg = max(
+                        (current_equity or 0) * CAPITAL_ALLOCATION_PCT / 2,
+                        MIN_TRADE_USD
+                    )
+                    position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                        exchange, dir_str,
+                        {'AAVE': aave_now, 'ETH': eth_now},
+                        z, prob,
+                        hedge_ratio=hedge_ratio, spread_value=spread_value,
+                        trade_amount_usd=trade_notional_per_leg
+                    )
+                    if position != "FLAT":
+                        set_state(STATARB_STATE_KEY, {'entry_time': datetime.now().isoformat()})
+                else:
+                    print("🚫 Trade rejeté par le vigile ML.")
+                    log_trade("REJECTED_BY_ML", z, prob, aave_now, eth_now,
+                              hedge_ratio=hedge_ratio, spread_value=spread_value)
 
-                elif position == "SHORT_SPREAD":
-                    if candles_in_trade >= TIME_LIMIT:
-                        print(f"⏰ BARRIÈRE TEMPORELLE ({candles_in_trade} bougies = {candles_in_trade*15//60}h). Fermeture forcée.")
-                        position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
-                            exchange, "EXIT_SHORT_SPREAD",
-                            {'AAVE': aave_now, 'ETH': eth_now},
-                            z, 0, pos_aave_size, pos_eth_size,
-                            entry_price_aave, entry_price_eth,
-                            entry_candle, candle_count,
-                            hedge_ratio, spread_value, exit_reason="TIME_LIMIT"
-                        )
-                        direction_int = 0
-                    elif z >= SL_ZSCORE or upnl_pct <= SL_PNL:
-                        reason = "STOP_LOSS_Z" if z >= SL_ZSCORE else "STOP_LOSS_PNL"
-                        print(f"🛑 STOP-LOSS DÉCLENCHÉ ({reason} | Z={z:.2f} | PnL={upnl_pct*100:.2f}%). Fermeture forcée.")
-                        position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
-                            exchange, "EXIT_SHORT_SPREAD",
-                            {'AAVE': aave_now, 'ETH': eth_now},
-                            z, 0, pos_aave_size, pos_eth_size,
-                            entry_price_aave, entry_price_eth,
-                            entry_candle, candle_count,
-                            hedge_ratio, spread_value, exit_reason=reason
-                        )
-                        direction_int = 0
-                    elif z <= 0:
-                        print("🎯 Take Profit (Z <= 0). Fermeture du Short Spread.")
-                        position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
-                            exchange, "EXIT_SHORT_SPREAD",
-                            {'AAVE': aave_now, 'ETH': eth_now},
-                            z, 0, pos_aave_size, pos_eth_size,
-                            entry_price_aave, entry_price_eth,
-                            entry_candle, candle_count,
-                            hedge_ratio, spread_value, exit_reason="SIGNAL_EXIT"
-                        )
-                        direction_int = 0
+        print("✅ Scan terminé.")
 
-                # --- LOGIQUE D'ENTRÉE ---
-                elif position == "FLAT":
-                    # Vérification régime avant toute entrée
-                    if regime and not regime['strategies']['stat_arb']:
-                        r = regime['regime']
-                        print(f"  🚫 Stat arb désactivé (régime {r}) — aucune entrée.")
-                    elif z <= -2.0 or z >= 2.0:
-                        print("⚠️ Anomalie détectée ! Consultation du ML...")
+    except Exception as e:
+        print(f"❌ Erreur critique : {e}")
+        sys.exit(1)  # code de sortie non-zéro → le run GitHub Actions apparaît
+                      # en échec (visible dans l'onglet Actions, alertable)
 
-                        features = [
-                            current_state['zscore'],       current_state['zscore_mom_1h'],
-                            current_state['zscore_mom_4h'], current_state['aave_ret_1h'],
-                            current_state['eth_ret_1h'],   current_state['aave_vol_4h'],
-                            current_state['eth_vol_4h']
-                        ]
-
-                        prob = model.predict_proba([features])[0][1]
-                        print(f"🧠 Confiance ML : {prob*100:.2f}%")
-
-                        if prob > THRESHOLD_ML:
-                            dir_str = "ENTRY_LONG_SPREAD" if z <= -2.0 else "ENTRY_SHORT_SPREAD"
-                            direction_int = 1 if z <= -2.0 else -1
-                            # 2% du capital actuel = notionnel total du trade,
-                            # réparti moitié-moitié entre les 2 pattes.
-                            trade_notional_per_leg = max(
-                                (current_equity or 0) * CAPITAL_ALLOCATION_PCT / 2,
-                                MIN_TRADE_USD
-                            )
-                            position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
-                                exchange, dir_str,
-                                {'AAVE': aave_now, 'ETH': eth_now},
-                                z, prob,
-                                hedge_ratio=hedge_ratio, spread_value=spread_value,
-                                trade_amount_usd=trade_notional_per_leg
-                            )
-                            if position != "FLAT":
-                                entry_candle = candle_count
-                                num_trades_total += 1
-                        else:
-                            print("🚫 Trade rejeté par le vigile ML.")
-                            log_trade("REJECTED_BY_ML", z, prob, aave_now, eth_now,
-                                      hedge_ratio=hedge_ratio, spread_value=spread_value)
-
-                time.sleep(60)
-            else:
-                time.sleep(1)
-
-        except Exception as e:
-            print(f"❌ Erreur critique : {e}")
-            time.sleep(10)
 
 if __name__ == "__main__":
     main()
