@@ -42,6 +42,16 @@ FUNDING_SCRIPT         = ROOT_DIR / "FundingCarry_Multi" / "scripts" / "live_fun
 SELECT_PAIR_SCRIPT     = ROOT_DIR / "Regime_Detector"    / "scripts" / "select_pair.py"
 SELECT_FUNDING_SCRIPT  = ROOT_DIR / "FundingCarry_Multi" / "scripts" / "select_funding_pair.py"
 
+# Verrou global : empêche DEUX subprocess de tourner en même temps, peu
+# importe le calage horaire. Le crash du 01/09 est arrivé parce que le
+# rescan funding (calé arbitrairement "24h après le démarrage du thread")
+# est retombé pile sur un scan StatArb (toutes les 15min) — un simple
+# décalage d'horaire ne suffit pas à garantir que ça ne se reproduise
+# jamais après un futur redéploiement à une heure différente. Ce verrou,
+# lui, le garantit dans tous les cas : si un subprocess tourne déjà, le
+# suivant attend qu'il se termine avant de démarrer.
+_subprocess_lock = threading.Lock()
+
 
 def run_subprocess(script_path, label, timeout=280):
     """
@@ -49,26 +59,29 @@ def run_subprocess(script_path, label, timeout=280):
     rescan). Toute la mémoire utilisée est rendue à l'OS dès que le
     sous-processus se termine — jamais résidente dans le process
     principal Flask.
+    Le verrou global garantit qu'un seul subprocess tourne à la fois,
+    quel que soit le calage horaire des différentes boucles.
     """
-    try:
-        result = subprocess.run(
-            [sys.executable, str(script_path)],
-            capture_output=True, text=True, timeout=timeout,
-        )
-        if result.stdout:
-            print(result.stdout)
-        if result.returncode != 0:
-            print(f"[BG] ⚠️ {label} a terminé avec le code {result.returncode}")
-            if result.stderr:
-                print(result.stderr[-1500:])
+    with _subprocess_lock:
+        try:
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                capture_output=True, text=True, timeout=timeout,
+            )
+            if result.stdout:
+                print(result.stdout)
+            if result.returncode != 0:
+                print(f"[BG] ⚠️ {label} a terminé avec le code {result.returncode}")
+                if result.stderr:
+                    print(result.stderr[-1500:])
+                return False
+            return True
+        except subprocess.TimeoutExpired:
+            print(f"[BG] ⚠️ {label} a dépassé le timeout ({timeout}s)")
             return False
-        return True
-    except subprocess.TimeoutExpired:
-        print(f"[BG] ⚠️ {label} a dépassé le timeout ({timeout}s)")
-        return False
-    except Exception as e:
-        print(f"[BG] ⚠️ Erreur lancement {label} : {e}")
-        return False
+        except Exception as e:
+            print(f"[BG] ⚠️ Erreur lancement {label} : {e}")
+            return False
 
 
 def _seconds_until_next_quarter_hour(buffer_seconds=5):
@@ -118,18 +131,44 @@ def funding_loop():
         run_subprocess(FUNDING_SCRIPT, "Funding cycle")
 
 
+def _seconds_until_next_daily_time(hour, minute, buffer_seconds=5):
+    """Secondes jusqu'au prochain HH:MM local (aujourd'hui ou demain)."""
+    from datetime import timedelta
+    now = datetime.now()
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return (target - now).total_seconds() + buffer_seconds
+
+
+def _seconds_until_next_weekly_time(weekday, hour, minute, buffer_seconds=5):
+    """Secondes jusqu'au prochain jour de semaine (0=lundi) à HH:MM local."""
+    from datetime import timedelta
+    now = datetime.now()
+    days_ahead = (weekday - now.weekday()) % 7
+    target = (now + timedelta(days=days_ahead)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=7)
+    return (target - now).total_seconds() + buffer_seconds
+
+
 def statarb_rescan_loop():
-    """Relance le scan de cointégration toutes les 7 jours."""
+    """Relance le scan de cointégration chaque lundi à 04:07 (heure fixe,
+    creuse, décalée de 15min pour ne jamais tomber pile sur un scan
+    StatArb même si le timing dérive légèrement)."""
     while True:
-        time.sleep(7 * 24 * 3600)
+        wait = _seconds_until_next_weekly_time(weekday=0, hour=4, minute=7)
+        time.sleep(wait)
         print("[BG] 🔄 Rescan StatArb hebdomadaire...")
         run_subprocess(SELECT_PAIR_SCRIPT, "select_pair.py", timeout=600)
 
 
 def funding_rescan_loop():
-    """Relance le scan de sélection funding toutes les 24h."""
+    """Relance le scan de sélection funding chaque jour à 04:22 (heure fixe,
+    creuse, décalée du rescan StatArb pour éviter tout chevauchement)."""
     while True:
-        time.sleep(24 * 3600)
+        wait = _seconds_until_next_daily_time(hour=4, minute=22)
+        time.sleep(wait)
         print("[BG] 🔄 Rescan Funding quotidien...")
         run_subprocess(SELECT_FUNDING_SCRIPT, "select_funding_pair.py", timeout=600)
 
