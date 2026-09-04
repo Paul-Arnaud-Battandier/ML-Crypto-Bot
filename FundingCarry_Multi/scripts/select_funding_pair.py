@@ -7,7 +7,7 @@ Filtre strict basé sur :
   - % de paiements positifs > seuil (consistance)
   - Funding actuel positif (ne pas entrer dans le mauvais sens)
 
-Écrit le résultat dans ../data/best_funding.json.
+Écrit le résultat dans Supabase (bot_state['best_funding']).
 """
 
 import ccxt
@@ -46,6 +46,13 @@ MIN_APR_30D       = 4.0    # % APR minimum sur 30j (breakeven ~25j standard)
 MIN_POSITIVE_PCT  = 60.0   # % minimum de paiements positifs sur 30j
 MIN_CURRENT_APR   = 0.0    # Funding actuel doit être positif
 
+# Délai entre appels API — augmenté de 0.5s à 1.2s suite à un ban IP
+# Binance (erreur 418 / -1003 "Way too many requests") pendant un rescan
+# du 04/09 : 20 symboles x 2 appels (history + current) à 0.5s d'écart
+# dépassait le rate-limit de poids malgré enableRateLimit=True (qui
+# espace les requêtes mais ne garantit pas de rester sous le seuil).
+API_CALL_DELAY = 1.2
+
 UNIVERSE = [
     'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
     'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'LINK/USDT', 'DOT/USDT',
@@ -64,11 +71,19 @@ def fetch_funding_data(exchange, symbol, days=30):
             return None, None
         rates = [h['fundingRate'] for h in history]
 
+        time.sleep(API_CALL_DELAY)  # espace les 2 appels du même symbole
+
         # Actuel
         current = exchange.fetch_funding_rate(symbol)
         current_rate = current.get('fundingRate', None)
 
         return rates, current_rate
+    except ccxt.DDoSProtection as e:
+        # Ban IP Binance (418/-1003) — on arrête le scan proprement plutôt
+        # que de continuer à taper sur une IP déjà bannie (ça prolongerait
+        # potentiellement le ban) et on garde les résultats déjà obtenus.
+        print(f"    🚫 {symbol}: rate-limit/ban Binance détecté — arrêt du scan pour cette exécution ({e})")
+        raise
     except Exception as e:
         print(f"    ⚠️  {symbol}: {e}")
         return None, None
@@ -112,7 +127,7 @@ def get_best_funding(verbose=True):
     """
     Scanne toutes les paires candidates et retourne la meilleure
     opportunité de carry (Long Spot + Short Perp).
-    Écrit le résultat dans best_funding.json.
+    Écrit le résultat dans Supabase (bot_state['best_funding']).
     """
     exchange = ccxt.binance({
         'enableRateLimit': True,
@@ -127,9 +142,16 @@ def get_best_funding(verbose=True):
         print("=" * 60)
 
     results = []
+    banned = False
     for sym in UNIVERSE:
-        time.sleep(0.5)  # Espace les appels pour éviter de dépasser le rate-limit weight
-        rates, current_rate = fetch_funding_data(exchange, sym)
+        if banned:
+            break
+        time.sleep(API_CALL_DELAY)  # Espace les appels pour éviter de dépasser le rate-limit weight
+        try:
+            rates, current_rate = fetch_funding_data(exchange, sym)
+        except ccxt.DDoSProtection:
+            banned = True
+            break
         if rates is None or current_rate is None:
             continue
 
@@ -159,6 +181,10 @@ def get_best_funding(verbose=True):
                   f"Actuel: {current_apr:>7.2f}% | "
                   f"Positif: {positive_pct:.0f}% | "
                   f"Breakeven: {breakeven:.0f}j")
+
+    if banned:
+        print("\n🚫 Scan interrompu à cause d'un ban/rate-limit Binance — "
+              "résultat basé uniquement sur les symboles déjà scannés avant le ban.")
 
     if not results:
         print("❌ Aucune donnée récupérée")

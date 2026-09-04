@@ -298,6 +298,18 @@ def compute_unrealized_pnl(state, current_spot, current_perp):
 
 
 # ── Garde-fou : l'état Supabase correspond-il à la réalité Binance ? ──
+def _normalize_symbol(sym):
+    """
+    ccxt renvoie les positions perpetual au format unifié 'BASE/QUOTE:SETTLE'
+    (ex: 'DOGE/USDT:USDT'), alors que enter_position() stocke le symbole
+    au format simple 'BASE/QUOTE' (ex: 'DOGE/USDT') — celui qui a servi à
+    passer l'ordre. Sans cette normalisation, la comparaison échoue TOUJOURS
+    même pour une position réellement ouverte (bug repéré le 04/09 : fausse
+    alerte 19s après une entrée qui s'était pourtant bien exécutée).
+    """
+    return sym.split(':')[0] if sym else sym
+
+
 def sanity_check_position(perp_ex, state):
     """
     Compare l'état enregistré à ce qui existe réellement sur l'exchange.
@@ -315,13 +327,14 @@ def sanity_check_position(perp_ex, state):
         return
 
     if state['position'] == 'FLAT' and open_positions:
-        syms = ', '.join(p['symbol'] for p in open_positions)
+        syms = ', '.join(_normalize_symbol(p['symbol']) for p in open_positions)
         print(f"  🚨 ALERTE : état = FLAT mais Binance montre une position ouverte "
               f"sur [{syms}] ! Le state Supabase est probablement désynchronisé "
               f"(ex : crash pendant une entrée). NE PAS laisser le bot entrer "
               f"une nouvelle position tant que ce n'est pas résolu manuellement.")
     elif state['position'] != 'FLAT':
-        match = any(p['symbol'] == state['symbol'] for p in open_positions)
+        match = any(_normalize_symbol(p['symbol']) == _normalize_symbol(state['symbol'])
+                    for p in open_positions)
         if not match:
             print(f"  🚨 ALERTE : état = position ouverte sur {state['symbol']} "
                   f"mais Binance ne montre AUCUNE position correspondante ! "
