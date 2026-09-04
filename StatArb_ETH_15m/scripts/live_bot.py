@@ -96,39 +96,20 @@ def read_best_pair():
     return data
 
 def init_csv():
-    """Crée les fichiers CSV s'ils n'existent pas avec leurs en-têtes"""
-    if not os.path.exists(EQUITY_CSV):
-        with open(EQUITY_CSV, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                'timestamp', 'equity_usdt', 'position_status',
-                'unrealized_pnl_usdt', 'unrealized_pnl_pct', 'num_trades_total'
-            ])
-
-    if not os.path.exists(TRADES_CSV):
-        with open(TRADES_CSV, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                'timestamp', 'action', 'zscore', 'ml_prob',
-                'aave_price', 'eth_price', 'hedge_ratio', 'spread_value',
-                'pnl_pct', 'duration_candles', 'exit_reason'
-            ])
+    """
+    Ancien : créait les CSV locaux avec en-têtes. Supprimé — chaque scan
+    tourne en sous-processus isolé sur le disque éphémère de Render, donc
+    un CSV local ne survit à rien et personne ne le lit (le dashboard lit
+    uniquement Supabase). Gardé comme no-op pour ne pas casser l'appel
+    dans main(), mais ne fait plus rien.
+    """
+    pass
 
 def log_equity(exchange, position, unrealized_pnl_usdt, unrealized_pnl_pct, num_trades_total):
-    """Enregistre le solde actuel avec métriques enrichies"""
+    """Enregistre le solde actuel avec métriques enrichies (Supabase seul)"""
     try:
         balance = exchange.fetch_balance()
         usdt_total = balance['total'].get('USDT', 0)
-        with open(EQUITY_CSV, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                round(usdt_total, 4),
-                position,
-                round(unrealized_pnl_usdt, 4),
-                round(unrealized_pnl_pct, 4),
-                num_trades_total
-            ])
         supabase_insert('live_equity', {
             'timestamp'           : datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'equity_usdt'         : round(usdt_total, 4),
@@ -145,22 +126,7 @@ def log_equity(exchange, position, unrealized_pnl_usdt, unrealized_pnl_pct, num_
 def log_trade(action, zscore, ml_prob, aave_price, eth_price,
               hedge_ratio=None, spread_value=None,
               pnl_pct=None, duration_candles=None, exit_reason=None):
-    """Enregistre une action de trading avec métriques enrichies"""
-    with open(TRADES_CSV, 'a', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            action,
-            round(zscore, 4),
-            round(ml_prob, 4),
-            aave_price,
-            eth_price,
-            round(hedge_ratio, 6) if hedge_ratio is not None else '',
-            round(spread_value, 6) if spread_value is not None else '',
-            round(pnl_pct * 100, 4) if pnl_pct is not None else '',
-            duration_candles if duration_candles is not None else '',
-            exit_reason if exit_reason is not None else ''
-        ])
+    """Enregistre une action de trading avec métriques enrichies (Supabase seul)"""
     supabase_insert('live_trades', {
         'timestamp'       : datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'action'          : action,

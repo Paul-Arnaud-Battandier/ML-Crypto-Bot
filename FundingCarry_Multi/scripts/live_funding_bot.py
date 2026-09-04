@@ -89,26 +89,16 @@ def supabase_insert(table, data):
 
 # ── CSV logging ───────────────────────────────────────────────
 def init_csv():
-    if not EQUITY_CSV.exists():
-        with open(EQUITY_CSV, 'w', newline='') as f:
-            csv.writer(f).writerow([
-                'timestamp', 'equity_usdt', 'position_status',
-                'symbol', 'funding_collected_usd', 'unrealized_pnl_usd',
-            ])
-    if not TRADES_CSV.exists():
-        with open(TRADES_CSV, 'w', newline='') as f:
-            csv.writer(f).writerow([
-                'timestamp', 'action', 'symbol', 'spot_price', 'perp_price',
-                'basis_pct', 'funding_rate_pct', 'funding_apr',
-                'size_usd', 'exit_reason', 'total_funding_collected_usd',
-            ])
+    """
+    Ancien : créait les CSV locaux avec en-têtes. Supprimé — chaque cycle
+    tourne en sous-processus isolé sur le disque éphémère de Render, un
+    CSV local ne survit à rien et personne ne le lit (dashboard = Supabase
+    uniquement). No-op gardé pour ne pas casser l'appel dans main().
+    """
+    pass
 
 def log_equity(equity, position, symbol, funding_collected, unrealized_pnl):
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    row = [ts, round(equity, 4), position, symbol or '',
-           round(funding_collected, 4), round(unrealized_pnl, 4)]
-    with open(EQUITY_CSV, 'a', newline='') as f:
-        csv.writer(f).writerow(row)
     supabase_insert('funding_equity', {
         'timestamp'             : ts,
         'equity_usdt'           : round(equity, 4),
@@ -123,14 +113,6 @@ def log_trade(action, symbol, spot_price, perp_price, funding_rate,
     basis_pct = (perp_price - spot_price) / spot_price * 100 if spot_price else 0
     apr = funding_rate * 3 * 365 * 100
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    with open(TRADES_CSV, 'a', newline='') as f:
-        csv.writer(f).writerow([
-            ts, action, symbol,
-            round(spot_price, 4), round(perp_price, 4),
-            round(basis_pct, 4), round(funding_rate * 100, 5),
-            round(apr, 2), TRADE_AMOUNT_USD,
-            exit_reason or '', round(total_funding or 0, 4),
-        ])
     supabase_insert('funding_trades', {
         'timestamp'                   : ts,
         'action'                      : action,
@@ -144,6 +126,7 @@ def log_trade(action, symbol, spot_price, perp_price, funding_rate,
         'exit_reason'                 : exit_reason,
         'total_funding_collected_usd' : round(total_funding or 0, 4),
     })
+
 
 
 # ── Persistance de la position (survie aux redémarrages) ──────
