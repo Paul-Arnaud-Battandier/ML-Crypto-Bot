@@ -465,7 +465,10 @@ def main():
 
     init_csv()
     exchange = init_exchange()
-    model = joblib.load(MODEL_FILE)
+    # ⚠️ Pas de joblib.load(MODEL_FILE) ici — chargé en lazy plus bas,
+    # uniquement si une décision d'entrée ML est réellement nécessaire.
+    # Économise mémoire/CPU sur les scans (fréquents) où le régime
+    # désactive StatArb et qu'aucune position n'est ouverte à monitorer.
 
     initial_equity = log_equity(exchange, "FLAT", 0.0, 0.0, 0)
     print(f"✅ API connectée. Capital de départ : {initial_equity:.2f} USDT")
@@ -490,7 +493,25 @@ def main():
               f"({'stat arb ✅' if regime['strategies']['stat_arb'] else 'stat arb ❌'})")
 
     # Récupération automatique de la position (source de vérité = Binance)
+    # — léger (un seul appel ccxt fetch_positions), pas besoin du modèle
+    # ML ni de l'historique OHLCV pour ça.
     position, direction_int, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = recover_position(exchange)
+
+    # ── FAST PATH ───────────────────────────────────────────────
+    # Si aucune position n'est ouverte ET que le régime désactive les
+    # nouvelles entrées, il n'y a strictement rien à faire ce scan :
+    # pas besoin de charger le modèle ML ni de récupérer/calculer tout
+    # l'historique OHLCV. On s'arrête ici — économie mémoire/CPU sur
+    # la majorité des scans (le régime est souvent NEUTRAL/TRENDING).
+    # Si une position EST ouverte, on continue quel que soit le régime :
+    # le stop-loss/take-profit doit continuer à être monitoré.
+    stat_arb_enabled = regime['strategies']['stat_arb'] if regime else True
+    if position == "FLAT" and not stat_arb_enabled:
+        r = regime['regime'] if regime else 'INCONNU'
+        print(f"  🚫 Stat arb désactivé (régime {r}) — aucune position ouverte, "
+              f"scan complet sauté (pas de modèle ML ni d'historique chargés).")
+        print("✅ Scan terminé.")
+        return
 
     # Heure d'entrée réelle, persistée sur Supabase — remplace l'ancien
     # compteur de bougies (candle_count - entry_candle) qui se remettait à
@@ -620,6 +641,10 @@ def main():
             elif z <= -2.0 or z >= 2.0:
                 print("⚠️ Anomalie détectée ! Consultation du ML...")
 
+                model = joblib.load(MODEL_FILE)  # chargé ici seulement —
+                                                  # pas utile plus tôt, et pas
+                                                  # utile du tout si on est
+                                                  # jamais arrivé jusqu'ici.
                 features = [
                     current_state['zscore'],       current_state['zscore_mom_1h'],
                     current_state['zscore_mom_4h'], current_state['aave_ret_1h'],
