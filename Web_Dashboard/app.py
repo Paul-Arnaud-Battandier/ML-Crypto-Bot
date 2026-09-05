@@ -85,6 +85,38 @@ def sb_get_all(table, params='', batch_size=1000):
     return all_rows
 
 
+def build_synthetic_equity(rows, capital_reference, current_contrib_fn):
+    """
+    Reconstruit une courbe de capital propre à UNE stratégie, à partir de
+    son propre P&L réalisé + latent — indépendamment du solde brut du
+    compte Binance (equity_usdt), qui est PARTAGÉ entre StatArb et Funding
+    sur le même wallet Futures. Une position ouverte par l'un des deux
+    bots réserve de la marge sur ce wallet commun, ce qui fait "bouger"
+    le solde lu par l'AUTRE bot alors qu'il n'a rien fait — découvert le
+    04/09 quand l'equity StatArb chutait pendant qu'il était FLAT, à
+    cause d'une position Funding fraîchement ouverte sur le même compte.
+
+    current_contrib_fn(row) doit renvoyer la contribution $ (réalisée +
+    latente) de la position EN COURS à cette ligne précise (0 si FLAT) —
+    différente pour StatArb (unrealized_pnl_usdt) et Funding
+    (funding_collected_usd + unrealized_pnl_usd).
+    """
+    values = []
+    realized_cum = 0.0
+    prev_status  = None
+    prev_contrib = 0.0
+    for row in rows:
+        status  = row.get('position_status', 'FLAT') or 'FLAT'
+        contrib = current_contrib_fn(row) if status != 'FLAT' else 0.0
+        if prev_status not in (None, 'FLAT') and status == 'FLAT':
+            # La position précédente vient de se fermer -> on fige
+            # définitivement son P&L dans le cumul réalisé.
+            realized_cum += prev_contrib
+        values.append(round(capital_reference + realized_cum + contrib, 2))
+        prev_status, prev_contrib = status, contrib
+    return values
+
+
 def get_statarb_data():
     """Récupère toutes les données StatArb (equity, trades, stats)"""
     # Historique complet depuis la toute première position du bot, pas
@@ -120,18 +152,30 @@ def get_statarb_data():
     current = equity_raw[-1] if equity_raw else {
         'equity_usdt': 0, 'position_status': 'UNKNOWN', 'unrealized_pnl_pct': 0,
     }
+    current = dict(current)  # copie — on va remplacer equity_usdt affiché
 
     chart_labels, chart_values = [], []
+    capital_reference = round(equity_raw[0].get('equity_usdt', 0), 2) if equity_raw else 0
+    synthetic_values = build_synthetic_equity(
+        equity_raw, capital_reference,
+        current_contrib_fn=lambda row: row.get('unrealized_pnl_usdt', 0) or 0
+    )
     for e in equity_raw:
         ts = e.get('timestamp', '')
         chart_labels.append(ts[5:16] if len(ts) > 15 else ts)
-        chart_values.append(round(e.get('equity_usdt', 0), 2))
+    chart_values = synthetic_values
+    if chart_values:
+        current['equity_usdt'] = chart_values[-1]  # cohérent avec la courbe —
+                                                     # sinon la carte "Capital"
+                                                     # afficherait encore le
+                                                     # solde brut contaminé.
 
-    # Vrai rendement du portefeuille : évolution du capital réel sur la
-    # fenêtre affichée, pas la somme des % individuels par trade.
-    if len(chart_values) >= 2 and chart_values[0]:
+    # Rendement propre à StatArb (P&L réalisé+latent de SES trades), pas
+    # l'évolution du solde brut du compte (contaminé par le funding bot
+    # qui partage le même wallet Futures).
+    if len(chart_values) >= 2 and capital_reference:
         stats['portfolio_return_pct'] = round(
-            (chart_values[-1] - chart_values[0]) / chart_values[0] * 100, 3
+            (chart_values[-1] - chart_values[0]) / capital_reference * 100, 3
         )
     else:
         stats['portfolio_return_pct'] = 0.0
@@ -157,6 +201,20 @@ def get_funding_data():
         'equity_usdt': 0, 'position_status': 'FLAT', 'symbol': '',
         'funding_collected_usd': 0, 'unrealized_pnl_usd': 0,
     }
+    current = dict(current)
+
+    chart_labels, chart_values = [], []
+    capital_reference = round(equity_raw[0].get('equity_usdt', 0), 2) if equity_raw else 0
+    chart_values = build_synthetic_equity(
+        equity_raw, capital_reference,
+        current_contrib_fn=lambda row: (row.get('funding_collected_usd', 0) or 0)
+                                      + (row.get('unrealized_pnl_usd', 0) or 0)
+    )
+    for e in equity_raw:
+        ts = e.get('timestamp', '')
+        chart_labels.append(ts[5:16] if len(ts) > 15 else ts)
+    if chart_values:
+        current['equity_usdt'] = chart_values[-1]
 
     stats = {
         'total_closed_positions'   : len(all_exits),
@@ -164,12 +222,6 @@ def get_funding_data():
         'current_funding_collected': round(current.get('funding_collected_usd', 0) or 0, 4),
         'avg_funding_per_position' : round(sum(total_funding_list) / len(total_funding_list), 4) if total_funding_list else 0,
     }
-
-    chart_labels, chart_values = [], []
-    for e in equity_raw:
-        ts = e.get('timestamp', '')
-        chart_labels.append(ts[5:16] if len(ts) > 15 else ts)
-        chart_values.append(round(e.get('equity_usdt', 0), 2))
 
     return {
         'trades': trades, 'stats': stats, 'current': current,
