@@ -125,7 +125,8 @@ def log_equity(exchange, position, unrealized_pnl_usdt, unrealized_pnl_pct, num_
 
 def log_trade(action, zscore, ml_prob, aave_price, eth_price,
               hedge_ratio=None, spread_value=None,
-              pnl_pct=None, duration_candles=None, exit_reason=None):
+              pnl_pct=None, duration_candles=None, exit_reason=None,
+              fees_usdt=None, pnl_usdt_net=None):
     """Enregistre une action de trading avec métriques enrichies (Supabase seul)"""
     supabase_insert('live_trades', {
         'timestamp'       : datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -141,6 +142,8 @@ def log_trade(action, zscore, ml_prob, aave_price, eth_price,
         'exit_reason'     : exit_reason,
         'sym1'            : SYM1,
         'sym2'            : SYM2,
+        'fees_usdt'       : round(fees_usdt, 4)     if fees_usdt        is not None else None,
+        'pnl_usdt_net'    : round(pnl_usdt_net, 4)  if pnl_usdt_net     is not None else None,
     })
 
 def init_exchange():
@@ -230,12 +233,49 @@ def compute_unrealized_pnl(position, direction,
     pnl_usdt = trade_amount_usd * gross_pnl_pct
     return pnl_usdt, gross_pnl_pct
 
+def _extract_fee_usdt(order, aave_price=None, eth_price=None):
+    """
+    Extrait le montant RÉEL des frais payés sur un ordre (renvoyé par
+    Binance via ccxt dans order['fee'] ou order['fees']), converti en
+    USDT. Ce sont les vrais frais débités par l'exchange, pas une
+    estimation — d'où l'intérêt de les capturer plutôt que de deviner un
+    taux fixe.
+    Si la devise des frais est inconnue (ex: BNB, discount activé), on
+    avertit et on l'ignore plutôt que de fausser le calcul avec une
+    conversion approximative sans le bon prix.
+    """
+    if not order:
+        return 0.0
+    candidates = []
+    if order.get('fee'):
+        candidates.append(order['fee'])
+    if order.get('fees'):
+        candidates.extend(order['fees'])
+    total = 0.0
+    for f in candidates:
+        cost = f.get('cost')
+        currency = f.get('currency')
+        if cost is None:
+            continue
+        cost = float(cost)
+        if currency == 'USDT':
+            total += cost
+        elif currency == 'AAVE' and aave_price:
+            total += cost * aave_price
+        elif currency == 'ETH' and eth_price:
+            total += cost * eth_price
+        else:
+            print(f"  ⚠️  Frais payés en {currency} ({cost}) — devise non "
+                  f"convertie, ignorée dans le calcul net (ex: BNB discount).")
+    return total
+
+
 def execute_trade(exchange, direction, current_prices, zscore, ml_prob,
                   pos_aave_size=0, pos_eth_size=0,
                   entry_price_aave=0, entry_price_eth=0,
                   entry_candle=0, current_candle=0,
                   hedge_ratio=None, spread_value=None, exit_reason=None,
-                  trade_amount_usd=None):
+                  trade_amount_usd=None, entry_fees_usdt=0.0):
 
     aave_price = current_prices['AAVE']
     eth_price  = current_prices['ETH']
@@ -260,12 +300,12 @@ def execute_trade(exchange, direction, current_prices, zscore, ml_prob,
 
     if direction == "ENTRY_LONG_SPREAD":
         try:
-            exchange.create_market_buy_order(SYM1, aave_size)
+            order_aave = exchange.create_market_buy_order(SYM1, aave_size)
         except Exception as e:
             print(f"❌ Échec ordre AAVE (buy) : {e}. Trade annulé.")
-            return "FLAT", 0, 0, 0, 0
+            return "FLAT", 0, 0, 0, 0, 0
         try:
-            exchange.create_market_sell_order(SYM2, eth_size)
+            order_eth = exchange.create_market_sell_order(SYM2, eth_size)
         except Exception as e:
             print(f"❌ Échec ordre ETH (sell) : {e}. Annulation de la patte AAVE...")
             try:
@@ -273,20 +313,23 @@ def execute_trade(exchange, direction, current_prices, zscore, ml_prob,
                 print("↩️ Patte AAVE annulée avec succès.")
             except Exception as e2:
                 print(f"🚨 ALERTE : Impossible d'annuler la patte AAVE : {e2}. Position partielle ouverte !")
-            return "FLAT", 0, 0, 0, 0
+            return "FLAT", 0, 0, 0, 0, 0
+        entry_fees = (_extract_fee_usdt(order_aave, aave_price=aave_price) +
+                      _extract_fee_usdt(order_eth, eth_price=eth_price))
+        print(f"  💳 Frais réels payés à l'entrée : ${entry_fees:.4f}")
         log_trade("LONG_SPREAD", zscore, ml_prob, aave_price, eth_price,
                   hedge_ratio=hedge_ratio, spread_value=spread_value)
         print("✅ Spread Ouvert (Long AAVE / Short ETH)")
-        return "LONG_SPREAD", aave_size, eth_size, aave_price, eth_price
+        return "LONG_SPREAD", aave_size, eth_size, aave_price, eth_price, entry_fees
 
     elif direction == "ENTRY_SHORT_SPREAD":
         try:
-            exchange.create_market_sell_order(SYM1, aave_size)
+            order_aave = exchange.create_market_sell_order(SYM1, aave_size)
         except Exception as e:
             print(f"❌ Échec ordre AAVE (sell) : {e}. Trade annulé.")
-            return "FLAT", 0, 0, 0, 0
+            return "FLAT", 0, 0, 0, 0, 0
         try:
-            exchange.create_market_buy_order(SYM2, eth_size)
+            order_eth = exchange.create_market_buy_order(SYM2, eth_size)
         except Exception as e:
             print(f"❌ Échec ordre ETH (buy) : {e}. Annulation de la patte AAVE...")
             try:
@@ -294,11 +337,14 @@ def execute_trade(exchange, direction, current_prices, zscore, ml_prob,
                 print("↩️ Patte AAVE annulée avec succès.")
             except Exception as e2:
                 print(f"🚨 ALERTE : Impossible d'annuler la patte AAVE : {e2}. Position partielle ouverte !")
-            return "FLAT", 0, 0, 0, 0
+            return "FLAT", 0, 0, 0, 0, 0
+        entry_fees = (_extract_fee_usdt(order_aave, aave_price=aave_price) +
+                      _extract_fee_usdt(order_eth, eth_price=eth_price))
+        print(f"  💳 Frais réels payés à l'entrée : ${entry_fees:.4f}")
         log_trade("SHORT_SPREAD", zscore, ml_prob, aave_price, eth_price,
                   hedge_ratio=hedge_ratio, spread_value=spread_value)
         print("✅ Spread Ouvert (Short AAVE / Long ETH)")
-        return "SHORT_SPREAD", aave_size, eth_size, aave_price, eth_price
+        return "SHORT_SPREAD", aave_size, eth_size, aave_price, eth_price, entry_fees
 
     elif direction in ("EXIT_LONG_SPREAD", "EXIT_SHORT_SPREAD"):
         # Calcul PnL réalisé
@@ -312,52 +358,72 @@ def execute_trade(exchange, direction, current_prices, zscore, ml_prob,
         duration = current_candle - entry_candle
 
         # Exécution des ordres de sortie
+        exit_fees = 0.0
         sl1 = SYM1
         if direction == "EXIT_LONG_SPREAD":
             try:
-                exchange.create_market_sell_order(SYM1, pos_aave_size)
+                order_aave = exchange.create_market_sell_order(SYM1, pos_aave_size)
+                exit_fees += _extract_fee_usdt(order_aave, aave_price=aave_price)
             except Exception as e:
                 print(f"❌ Échec fermeture AAVE (sell) : {e}. Retry dans 10s...")
                 time.sleep(10)
                 try:
-                    exchange.create_market_sell_order(SYM1, pos_aave_size)
+                    order_aave = exchange.create_market_sell_order(SYM1, pos_aave_size)
+                    exit_fees += _extract_fee_usdt(order_aave, aave_price=aave_price)
                 except Exception as e2:
                     print(f"🚨 ALERTE : Impossible de fermer AAVE : {e2}. Intervention manuelle requise !")
             try:
-                exchange.create_market_buy_order(SYM2, pos_eth_size)
+                order_eth = exchange.create_market_buy_order(SYM2, pos_eth_size)
+                exit_fees += _extract_fee_usdt(order_eth, eth_price=eth_price)
             except Exception as e:
                 print(f"❌ Échec fermeture ETH (buy) : {e}. Retry dans 10s...")
                 time.sleep(10)
                 try:
-                    exchange.create_market_buy_order(SYM2, pos_eth_size)
+                    order_eth = exchange.create_market_buy_order(SYM2, pos_eth_size)
+                    exit_fees += _extract_fee_usdt(order_eth, eth_price=eth_price)
                 except Exception as e2:
                     print(f"🚨 ALERTE : Impossible de fermer ETH : {e2}. Intervention manuelle requise !")
         else:
             try:
-                exchange.create_market_buy_order(SYM1, pos_aave_size)
+                order_aave = exchange.create_market_buy_order(SYM1, pos_aave_size)
+                exit_fees += _extract_fee_usdt(order_aave, aave_price=aave_price)
             except Exception as e:
                 print(f"❌ Échec fermeture AAVE (buy) : {e}. Retry dans 10s...")
                 time.sleep(10)
                 try:
-                    exchange.create_market_buy_order(SYM1, pos_aave_size)
+                    order_aave = exchange.create_market_buy_order(SYM1, pos_aave_size)
+                    exit_fees += _extract_fee_usdt(order_aave, aave_price=aave_price)
                 except Exception as e2:
                     print(f"🚨 ALERTE : Impossible de fermer AAVE : {e2}. Intervention manuelle requise !")
             try:
-                exchange.create_market_sell_order(SYM2, pos_eth_size)
+                order_eth = exchange.create_market_sell_order(SYM2, pos_eth_size)
+                exit_fees += _extract_fee_usdt(order_eth, eth_price=eth_price)
             except Exception as e:
                 print(f"❌ Échec fermeture ETH (sell) : {e}. Retry dans 10s...")
                 time.sleep(10)
                 try:
-                    exchange.create_market_sell_order(SYM2, pos_eth_size)
+                    order_eth = exchange.create_market_sell_order(SYM2, pos_eth_size)
+                    exit_fees += _extract_fee_usdt(order_eth, eth_price=eth_price)
                 except Exception as e2:
                     print(f"🚨 ALERTE : Impossible de fermer ETH : {e2}. Intervention manuelle requise !")
 
+        # PnL net réel = PnL brut (mouvement de prix) - TOUS les frais réels
+        # payés sur l'aller-retour (2 ordres entrée + 2 ordres sortie),
+        # capturés directement depuis les réponses Binance — pas une
+        # estimation.
+        notional = pos_aave_size * entry_price_aave  # approx. notionnel par patte à l'entrée
+        pnl_usdt_gross = pnl_pct * notional
+        total_fees     = (entry_fees_usdt or 0.0) + exit_fees
+        pnl_usdt_net   = pnl_usdt_gross - total_fees
+
         log_trade("EXIT", zscore, ml_prob, aave_price, eth_price,
                   hedge_ratio=hedge_ratio, spread_value=spread_value,
-                  pnl_pct=pnl_pct, duration_candles=duration, exit_reason=exit_reason)
-        print(f"✅ Spread Fermé. PnL : {pnl_pct*100:+.3f}% | Durée : {duration} bougies ({duration*15}min)")
-        return "FLAT", 0, 0, 0, 0
-
+                  pnl_pct=pnl_pct, duration_candles=duration, exit_reason=exit_reason,
+                  fees_usdt=total_fees, pnl_usdt_net=pnl_usdt_net)
+        print(f"✅ Spread Fermé. PnL brut : {pnl_pct*100:+.3f}% (${pnl_usdt_gross:+.4f}) | "
+              f"Frais réels totaux : ${total_fees:.4f} | "
+              f"PnL NET : ${pnl_usdt_net:+.4f} | Durée : {duration} bougies ({duration*15}min)")
+        return "FLAT", 0, 0, 0, 0, 0
 
 def recover_position(exchange):
     """
@@ -479,22 +545,28 @@ def main():
         print("✅ Scan terminé.")
         return
 
-    # Heure d'entrée réelle, persistée sur Supabase — remplace l'ancien
-    # compteur de bougies (candle_count - entry_candle) qui se remettait à
-    # zéro à chaque redémarrage du process et faussait le stop-loss 48h.
+    # Heure d'entrée réelle + frais réels payés à l'entrée, persistés sur
+    # Supabase — remplace l'ancien compteur de bougies (candle_count -
+    # entry_candle) qui se remettait à zéro à chaque redémarrage du
+    # process et faussait le stop-loss 48h.
     entry_time = None
+    entry_fees_usdt = 0.0
     if position != "FLAT":
         stored = get_state(STATARB_STATE_KEY)
         if stored and stored.get('entry_time'):
             entry_time = datetime.fromisoformat(stored['entry_time'])
+            entry_fees_usdt = stored.get('entry_fees_usdt', 0.0) or 0.0
         else:
             print("⚠️  Position ouverte détectée mais aucune heure d'entrée en "
                   "mémoire Supabase — le stop-loss 48h redémarre son horloge "
                   "maintenant par sécurité (mieux vaut sous-estimer la durée "
                   "que fermer une position par erreur). Vérifie manuellement "
-                  "si cette position dure depuis longtemps.")
+                  "si cette position dure depuis longtemps. Frais d'entrée "
+                  "également inconnus — le PnL net du prochain exit sous-"
+                  "estimera les frais réels (ne comptera que ceux de sortie).")
             entry_time = datetime.now()
-            set_state(STATARB_STATE_KEY, {'entry_time': entry_time.isoformat()})
+            set_state(STATARB_STATE_KEY, {'entry_time': entry_time.isoformat(),
+                                           'entry_fees_usdt': 0.0})
 
     now = datetime.now()
     print(f"\n[{now.strftime('%H:%M:%S')}] 🔄 Scan du marché...")
@@ -531,72 +603,78 @@ def main():
         if position == "LONG_SPREAD":
             if candles_in_trade >= TIME_LIMIT:
                 print(f"⏰ BARRIÈRE TEMPORELLE ({candles_in_trade} bougies = {candles_in_trade*15//60}h). Fermeture forcée.")
-                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth, _exit_fees = execute_trade(
                     exchange, "EXIT_LONG_SPREAD",
                     {'AAVE': aave_now, 'ETH': eth_now},
                     z, 0, pos_aave_size, pos_eth_size,
                     entry_price_aave, entry_price_eth,
                     0, candles_in_trade,
                     hedge_ratio, spread_value, exit_reason="TIME_LIMIT"
+                , entry_fees_usdt=entry_fees_usdt
                 )
                 set_state(STATARB_STATE_KEY, {'entry_time': None})
             elif z <= -SL_ZSCORE or upnl_pct <= SL_PNL:
                 reason = "STOP_LOSS_Z" if z <= -SL_ZSCORE else "STOP_LOSS_PNL"
                 print(f"🛑 STOP-LOSS DÉCLENCHÉ ({reason} | Z={z:.2f} | PnL={upnl_pct*100:.2f}%). Fermeture forcée.")
-                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth, _exit_fees = execute_trade(
                     exchange, "EXIT_LONG_SPREAD",
                     {'AAVE': aave_now, 'ETH': eth_now},
                     z, 0, pos_aave_size, pos_eth_size,
                     entry_price_aave, entry_price_eth,
                     0, candles_in_trade,
                     hedge_ratio, spread_value, exit_reason=reason
+                , entry_fees_usdt=entry_fees_usdt
                 )
                 set_state(STATARB_STATE_KEY, {'entry_time': None})
             elif z >= 0:
                 print("🎯 Take Profit (Z >= 0). Fermeture du Long Spread.")
-                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth, _exit_fees = execute_trade(
                     exchange, "EXIT_LONG_SPREAD",
                     {'AAVE': aave_now, 'ETH': eth_now},
                     z, 0, pos_aave_size, pos_eth_size,
                     entry_price_aave, entry_price_eth,
                     0, candles_in_trade,
                     hedge_ratio, spread_value, exit_reason="SIGNAL_EXIT"
+                , entry_fees_usdt=entry_fees_usdt
                 )
                 set_state(STATARB_STATE_KEY, {'entry_time': None})
 
         elif position == "SHORT_SPREAD":
             if candles_in_trade >= TIME_LIMIT:
                 print(f"⏰ BARRIÈRE TEMPORELLE ({candles_in_trade} bougies = {candles_in_trade*15//60}h). Fermeture forcée.")
-                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth, _exit_fees = execute_trade(
                     exchange, "EXIT_SHORT_SPREAD",
                     {'AAVE': aave_now, 'ETH': eth_now},
                     z, 0, pos_aave_size, pos_eth_size,
                     entry_price_aave, entry_price_eth,
                     0, candles_in_trade,
                     hedge_ratio, spread_value, exit_reason="TIME_LIMIT"
+                , entry_fees_usdt=entry_fees_usdt
                 )
                 set_state(STATARB_STATE_KEY, {'entry_time': None})
             elif z >= SL_ZSCORE or upnl_pct <= SL_PNL:
                 reason = "STOP_LOSS_Z" if z >= SL_ZSCORE else "STOP_LOSS_PNL"
                 print(f"🛑 STOP-LOSS DÉCLENCHÉ ({reason} | Z={z:.2f} | PnL={upnl_pct*100:.2f}%). Fermeture forcée.")
-                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth, _exit_fees = execute_trade(
                     exchange, "EXIT_SHORT_SPREAD",
                     {'AAVE': aave_now, 'ETH': eth_now},
                     z, 0, pos_aave_size, pos_eth_size,
                     entry_price_aave, entry_price_eth,
                     0, candles_in_trade,
                     hedge_ratio, spread_value, exit_reason=reason
+                , entry_fees_usdt=entry_fees_usdt
                 )
                 set_state(STATARB_STATE_KEY, {'entry_time': None})
             elif z <= 0:
                 print("🎯 Take Profit (Z <= 0). Fermeture du Short Spread.")
-                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth, _exit_fees = execute_trade(
                     exchange, "EXIT_SHORT_SPREAD",
                     {'AAVE': aave_now, 'ETH': eth_now},
                     z, 0, pos_aave_size, pos_eth_size,
                     entry_price_aave, entry_price_eth,
                     0, candles_in_trade,
                     hedge_ratio, spread_value, exit_reason="SIGNAL_EXIT"
+                , entry_fees_usdt=entry_fees_usdt
                 )
                 set_state(STATARB_STATE_KEY, {'entry_time': None})
 
@@ -628,7 +706,7 @@ def main():
                         (current_equity or 0) * CAPITAL_ALLOCATION_PCT / 2,
                         MIN_TRADE_USD
                     )
-                    position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth = execute_trade(
+                    position, pos_aave_size, pos_eth_size, entry_price_aave, entry_price_eth, entry_fees_paid = execute_trade(
                         exchange, dir_str,
                         {'AAVE': aave_now, 'ETH': eth_now},
                         z, prob,
@@ -636,7 +714,10 @@ def main():
                         trade_amount_usd=trade_notional_per_leg
                     )
                     if position != "FLAT":
-                        set_state(STATARB_STATE_KEY, {'entry_time': datetime.now().isoformat()})
+                        set_state(STATARB_STATE_KEY, {
+                            'entry_time': datetime.now().isoformat(),
+                            'entry_fees_usdt': entry_fees_paid,
+                        })
                 else:
                     print("🚫 Trade rejeté par le vigile ML.")
                     log_trade("REJECTED_BY_ML", z, prob, aave_now, eth_now,
