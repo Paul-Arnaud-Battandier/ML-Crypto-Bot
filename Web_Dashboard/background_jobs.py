@@ -83,7 +83,7 @@ def _acquire_distributed_lock(label, poll_interval=2):
     waited = 0
     while waited < DIST_LOCK_MAX_WAIT:
         lock = get_state(DIST_LOCK_KEY)
-        if lock is None:
+        if lock is None or lock.get('locked_by') is None:
             break
         try:
             locked_at = datetime.fromisoformat(lock['locked_at'])
@@ -107,7 +107,12 @@ def _acquire_distributed_lock(label, poll_interval=2):
 
 
 def _release_distributed_lock():
-    set_state(DIST_LOCK_KEY, None)
+    # set_state exige une valeur dict non-nulle (colonne 'value' NOT NULL
+    # sur bot_state) — passer None faisait échouer CHAQUE libération
+    # (erreur 23502 constatée le 09/09), empêchant le verrou de jamais se
+    # dégager proprement : il traînait jusqu'à expiration du TTL (5min) à
+    # chaque cycle au lieu de se libérer immédiatement après usage.
+    set_state(DIST_LOCK_KEY, {'locked_by': None, 'locked_at': None})
 
 
 def run_subprocess(script_path, label, timeout=280):
