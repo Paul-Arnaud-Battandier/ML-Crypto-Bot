@@ -270,12 +270,40 @@ def _extract_fee_usdt(order, aave_price=None, eth_price=None):
     return total
 
 
+def _fetch_native_pnl_fees(exchange, symbol, since_ms):
+    """
+    Récupère le PnL réalisé et les frais RÉELS depuis Binance
+    (fetch_my_trades), plutôt qu'un calcul théorique basé sur les prix.
+    Fenêtre max 48h (TIME_LIMIT) — largement sous la limite ~7j par
+    requête de Binance, pas besoin de paginer ici (contrairement au
+    script de diagnostic qui couvrait 90 jours).
+    Retourne (realized_pnl, fees_usdt) ou (None, None) si échec — le
+    fallback théorique prend le relai dans ce cas.
+    """
+    try:
+        trades = exchange.fetch_my_trades(symbol, since=since_ms, limit=200)
+    except Exception as e:
+        print(f"  ⚠️  fetch_my_trades({symbol}) natif a échoué : {e}. Fallback théorique.")
+        return None, None
+    if not trades:
+        print(f"  ⚠️  fetch_my_trades({symbol}) n'a rien renvoyé. Fallback théorique.")
+        return None, None
+    realized = 0.0
+    fees     = 0.0
+    for t in trades:
+        info = t.get('info', {})
+        realized += float(info.get('realizedPnl', 0) or 0)
+        if info.get('commissionAsset') == 'USDT':
+            fees += float(info.get('commission', 0) or 0)
+    return realized, fees
+
+
 def execute_trade(exchange, direction, current_prices, zscore, ml_prob,
                   pos_aave_size=0, pos_eth_size=0,
                   entry_price_aave=0, entry_price_eth=0,
                   entry_candle=0, current_candle=0,
                   hedge_ratio=None, spread_value=None, exit_reason=None,
-                  trade_amount_usd=None, entry_fees_usdt=0.0):
+                  trade_amount_usd=None, entry_fees_usdt=0.0, entry_datetime=None):
 
     aave_price = current_prices['AAVE']
     eth_price  = current_prices['ETH']
@@ -407,20 +435,43 @@ def execute_trade(exchange, direction, current_prices, zscore, ml_prob,
                 except Exception as e2:
                     print(f"🚨 ALERTE : Impossible de fermer ETH : {e2}. Intervention manuelle requise !")
 
-        # PnL net réel = PnL brut (mouvement de prix) - TOUS les frais réels
-        # payés sur l'aller-retour (2 ordres entrée + 2 ordres sortie),
-        # capturés directement depuis les réponses Binance — pas une
-        # estimation.
-        notional = pos_aave_size * entry_price_aave  # approx. notionnel par patte à l'entrée
-        pnl_usdt_gross = pnl_pct * notional
-        total_fees     = (entry_fees_usdt or 0.0) + exit_fees
-        pnl_usdt_net   = pnl_usdt_gross - total_fees
+        # PnL NET RÉEL : on interroge Binance directement (fetch_my_trades)
+        # plutôt que de recalculer nous-mêmes à partir des prix — ça inclut
+        # AUTOMATIQUEMENT le funding rate payé/reçu sur la durée de la
+        # position (ignoré par le calcul théorique, alors que StatArb trade
+        # en perpetual futures et y est donc soumis comme n'importe quelle
+        # position perp), le slippage réel, et les frais exacts.
+        notional = pos_aave_size * entry_price_aave  # utilisé seulement si fallback théorique
+        pnl_usdt_theoretical = pnl_pct * notional
+
+        pnl_usdt_native = None
+        fees_native     = None
+        if entry_datetime is not None:
+            since_ms = int(entry_datetime.timestamp() * 1000) - 60_000  # -1min de marge
+            realized_aave, fees_aave = _fetch_native_pnl_fees(exchange, SYM1, since_ms)
+            realized_eth,  fees_eth  = _fetch_native_pnl_fees(exchange, SYM2, since_ms)
+            if realized_aave is not None and realized_eth is not None:
+                pnl_usdt_native = realized_aave + realized_eth
+                fees_native     = (fees_aave or 0.0) + (fees_eth or 0.0)
+
+        if pnl_usdt_native is not None:
+            total_fees   = fees_native
+            pnl_usdt_net = pnl_usdt_native - fees_native
+            source_label = "NATIF Binance"
+        else:
+            # Fallback : l'API n'a pas répondu ou n'a rien renvoyé — on
+            # utilise le calcul théorique + les frais capturés sur CES
+            # ordres précis, en prévenant clairement que ça peut sous-
+            # estimer le vrai coût (funding rate notamment, absent d'ici).
+            total_fees   = (entry_fees_usdt or 0.0) + exit_fees
+            pnl_usdt_net = pnl_usdt_theoretical - total_fees
+            source_label = "FALLBACK théorique (funding rate non inclus !)"
 
         log_trade("EXIT", zscore, ml_prob, aave_price, eth_price,
                   hedge_ratio=hedge_ratio, spread_value=spread_value,
                   pnl_pct=pnl_pct, duration_candles=duration, exit_reason=exit_reason,
                   fees_usdt=total_fees, pnl_usdt_net=pnl_usdt_net)
-        print(f"✅ Spread Fermé. PnL brut : {pnl_pct*100:+.3f}% (${pnl_usdt_gross:+.4f}) | "
+        print(f"✅ Spread Fermé [{source_label}]. "
               f"Frais réels totaux : ${total_fees:.4f} | "
               f"PnL NET : ${pnl_usdt_net:+.4f} | Durée : {duration} bougies ({duration*15}min)")
         return "FLAT", 0, 0, 0, 0, 0
@@ -610,7 +661,7 @@ def main():
                     entry_price_aave, entry_price_eth,
                     0, candles_in_trade,
                     hedge_ratio, spread_value, exit_reason="TIME_LIMIT"
-                , entry_fees_usdt=entry_fees_usdt
+                , entry_fees_usdt=entry_fees_usdt, entry_datetime=entry_time
                 )
                 set_state(STATARB_STATE_KEY, {'entry_time': None})
             elif z <= -SL_ZSCORE or upnl_pct <= SL_PNL:
@@ -623,7 +674,7 @@ def main():
                     entry_price_aave, entry_price_eth,
                     0, candles_in_trade,
                     hedge_ratio, spread_value, exit_reason=reason
-                , entry_fees_usdt=entry_fees_usdt
+                , entry_fees_usdt=entry_fees_usdt, entry_datetime=entry_time
                 )
                 set_state(STATARB_STATE_KEY, {'entry_time': None})
             elif z >= 0:
@@ -635,7 +686,7 @@ def main():
                     entry_price_aave, entry_price_eth,
                     0, candles_in_trade,
                     hedge_ratio, spread_value, exit_reason="SIGNAL_EXIT"
-                , entry_fees_usdt=entry_fees_usdt
+                , entry_fees_usdt=entry_fees_usdt, entry_datetime=entry_time
                 )
                 set_state(STATARB_STATE_KEY, {'entry_time': None})
 
@@ -649,7 +700,7 @@ def main():
                     entry_price_aave, entry_price_eth,
                     0, candles_in_trade,
                     hedge_ratio, spread_value, exit_reason="TIME_LIMIT"
-                , entry_fees_usdt=entry_fees_usdt
+                , entry_fees_usdt=entry_fees_usdt, entry_datetime=entry_time
                 )
                 set_state(STATARB_STATE_KEY, {'entry_time': None})
             elif z >= SL_ZSCORE or upnl_pct <= SL_PNL:
@@ -662,7 +713,7 @@ def main():
                     entry_price_aave, entry_price_eth,
                     0, candles_in_trade,
                     hedge_ratio, spread_value, exit_reason=reason
-                , entry_fees_usdt=entry_fees_usdt
+                , entry_fees_usdt=entry_fees_usdt, entry_datetime=entry_time
                 )
                 set_state(STATARB_STATE_KEY, {'entry_time': None})
             elif z <= 0:
@@ -674,7 +725,7 @@ def main():
                     entry_price_aave, entry_price_eth,
                     0, candles_in_trade,
                     hedge_ratio, spread_value, exit_reason="SIGNAL_EXIT"
-                , entry_fees_usdt=entry_fees_usdt
+                , entry_fees_usdt=entry_fees_usdt, entry_datetime=entry_time
                 )
                 set_state(STATARB_STATE_KEY, {'entry_time': None})
 
