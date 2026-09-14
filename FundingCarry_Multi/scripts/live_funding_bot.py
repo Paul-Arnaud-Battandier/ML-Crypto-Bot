@@ -109,7 +109,8 @@ def log_equity(equity, position, symbol, funding_collected, unrealized_pnl):
     })
 
 def log_trade(action, symbol, spot_price, perp_price, funding_rate,
-              exit_reason=None, total_funding=None):
+              exit_reason=None, total_funding=None,
+              fees_usdt=None, pnl_usdt_net=None):
     basis_pct = (perp_price - spot_price) / spot_price * 100 if spot_price else 0
     apr = funding_rate * 3 * 365 * 100
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -125,6 +126,8 @@ def log_trade(action, symbol, spot_price, perp_price, funding_rate,
         'size_usd'                    : TRADE_AMOUNT_USD,
         'exit_reason'                 : exit_reason,
         'total_funding_collected_usd' : round(total_funding or 0, 4),
+        'fees_usdt'                   : round(fees_usdt, 4)    if fees_usdt    is not None else None,
+        'pnl_usdt_net'                : round(pnl_usdt_net, 4) if pnl_usdt_net is not None else None,
     })
 
 
@@ -230,6 +233,50 @@ def should_exit(state, current_funding_rate) -> tuple[bool, str]:
 
 
 # ── Exécution des ordres ──────────────────────────────────────
+def _fetch_native_perp_pnl_fees(perp_ex, symbol, since_ms):
+    """
+    Récupère le PnL réalisé natif + frais réels de la jambe PERP via
+    fetch_my_trades (même technique validée sur StatArb le 10-11/09).
+    Retourne (realized_pnl, fees_usdt) ou (None, None) si échec.
+    """
+    try:
+        trades = perp_ex.fetch_my_trades(symbol, since=since_ms, limit=200)
+    except Exception as e:
+        print(f"  ⚠️  fetch_my_trades perp({symbol}) a échoué : {e}")
+        return None, None
+    if not trades:
+        return None, None
+    realized, fees = 0.0, 0.0
+    for t in trades:
+        info = t.get('info', {})
+        realized += float(info.get('realizedPnl', 0) or 0)
+        if info.get('commissionAsset') == 'USDT':
+            fees += float(info.get('commission', 0) or 0)
+    return realized, fees
+
+
+def _fetch_native_fees_only(exchange, symbol, since_ms):
+    """
+    Le spot n'a pas de notion de PnL réalisé (juste un solde qui bouge) —
+    mais on peut quand même récupérer ses VRAIS frais via fetch_my_trades,
+    plutôt que de les ignorer complètement.
+    Retourne fees_usdt (0.0 si échec, jamais None — un fallback silencieux
+    à 0 est acceptable ici, contrairement au PnL qui a un vrai fallback
+    théorique ailleurs).
+    """
+    try:
+        trades = exchange.fetch_my_trades(symbol, since=since_ms, limit=200)
+    except Exception as e:
+        print(f"  ⚠️  fetch_my_trades spot({symbol}) a échoué : {e}")
+        return 0.0
+    fees = 0.0
+    for t in trades:
+        fee = t.get('fee') or {}
+        if fee.get('currency') == 'USDT':
+            fees += float(fee.get('cost', 0) or 0)
+    return fees
+
+
 def enter_position(spot_ex, perp_ex, symbol, spot_price, perp_price):
     """Long Spot + Short Perp"""
     spot_size = round(TRADE_AMOUNT_USD / spot_price, 4)
@@ -405,9 +452,36 @@ def main():
             if exit_flag:
                 print(f"\n  🚪 SORTIE : {exit_reason}")
                 exit_position(spot_ex, perp_ex, state)
+
+                # PnL/frais : perp natif (realizedPnl Binance) si possible,
+                # spot toujours théorique (Binance n'a pas de realizedPnl
+                # pour du spot) mais avec ses VRAIS frais capturés quand même.
+                since_ms = int(datetime.fromisoformat(state['entry_time']).timestamp() * 1000) - 60_000
+                perp_realized, perp_fees = _fetch_native_perp_pnl_fees(perp_ex, sym, since_ms)
+                spot_fees = _fetch_native_fees_only(spot_ex, sym, since_ms)
+
+                spot_pnl = (spot_price - state['entry_spot_price']) * state['spot_size']
+                if perp_realized is not None:
+                    perp_pnl_component = perp_realized
+                    perp_source = "NATIF"
+                else:
+                    perp_pnl_component = (state['entry_perp_price'] - perp_price) * state['perp_size']
+                    perp_source = "fallback théorique"
+
+                total_fees    = (perp_fees or 0.0) + spot_fees
+                basis_pnl_net = spot_pnl + perp_pnl_component - total_fees
+                total_funding = state['funding_collected_usd']
+                pnl_usdt_net  = basis_pnl_net + total_funding
+
+                print(f"  💰 PnL basis [perp {perp_source}] : ${basis_pnl_net:+.4f} | "
+                      f"Funding collecté : ${total_funding:+.4f} | "
+                      f"Frais réels : ${total_fees:.4f} | "
+                      f"PnL TOTAL NET : ${pnl_usdt_net:+.4f}")
+
                 log_trade("EXIT", sym, spot_price, perp_price, current_fr,
                           exit_reason=exit_reason,
-                          total_funding=state['funding_collected_usd'])
+                          total_funding=state['funding_collected_usd'],
+                          fees_usdt=total_fees, pnl_usdt_net=pnl_usdt_net)
                 total_collected = state['funding_collected_usd']
                 state = dict(_DEFAULT_STATE)  # reset propre, pas de
                                                # rechargement d'un état

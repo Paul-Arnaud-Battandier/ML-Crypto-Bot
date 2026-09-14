@@ -2,8 +2,8 @@
 select_pair.py
 ──────────────
 Scan hebdomadaire des paires cointégrées.
-Sélectionne la meilleure paire et écrit le résultat
-dans ../data/best_pair.json.
+Sélectionne la meilleure paire et écrit le résultat dans Supabase
+(bot_state['best_pair']).
 
 Peut être appelé :
   - En standalone : python select_pair.py
@@ -37,6 +37,12 @@ BEST_PAIR_FILE = DATA_DIR / "best_pair.json"
 DAYS      = 90    # Fenêtre de 90j (évite faux positifs bull run)
 TIMEFRAME = '1h'  # 1h = meilleur compromis signal/bruit
 WINDOW    = 50    # Rolling OLS window
+
+# Délai entre appels API — augmenté de 0.5s à 1.2s suite au ban IP Binance
+# constaté sur select_funding_pair.py le 04/09 (erreur 418 / -1003 "Way too
+# many requests"). Même cause possible ici : 11 paires candidates, jusqu'à
+# 2 symboles chacune, requêtes trop rapprochées malgré enableRateLimit=True.
+API_CALL_DELAY = 1.2
 
 # Paires candidates avec logique économique
 CANDIDATE_PAIRS = [
@@ -73,6 +79,10 @@ def fetch_close(symbol, timeframe=TIMEFRAME, days=DAYS):
             tf_ms = {'15m': 15*60*1000, '1h': 3600*1000, '4h': 4*3600*1000}
             if ohlcv[-1][0] >= int(datetime.now().timestamp()*1000) - tf_ms.get(timeframe, 3600*1000):
                 break
+            time.sleep(API_CALL_DELAY)  # entre chaque page de résultats du MÊME symbole
+        except ccxt.DDoSProtection as e:
+            print(f'    🚫 {symbol}: rate-limit/ban Binance détecté — arrêt pour ce symbole ({e})')
+            raise
         except Exception as e:
             print(f'    ⚠️ {symbol}: {e}')
             break
@@ -202,7 +212,7 @@ def score_pair(res):
 def get_best_pair(verbose=True):
     """
     Scanne toutes les paires candidates et retourne la meilleure.
-    Écrit le résultat dans best_pair.json.
+    Écrit le résultat dans Supabase (bot_state['best_pair']).
 
     Returns:
         dict | None
@@ -216,14 +226,25 @@ def get_best_pair(verbose=True):
     # 1. Téléchargement
     all_symbols = list(set([s for pair in CANDIDATE_PAIRS for s in pair]))
     prices      = {}
+    banned      = False
 
     if verbose:
         print("\n📥 Téléchargement des données...")
     for sym in all_symbols:
-        time.sleep(0.5)  # Espace les appels pour éviter de dépasser le rate-limit weight
-        df = fetch_close(sym)
+        if banned:
+            break
+        time.sleep(API_CALL_DELAY)  # Espace les appels pour éviter de dépasser le rate-limit weight
+        try:
+            df = fetch_close(sym)
+        except ccxt.DDoSProtection:
+            banned = True
+            break
         if df is not None and len(df) > WINDOW * 3:
             prices[sym] = df
+
+    if banned:
+        print("\n🚫 Scan interrompu à cause d'un ban/rate-limit Binance — "
+              "résultat basé uniquement sur les symboles déjà téléchargés avant le ban.")
 
     # 2. Scan
     if verbose:
