@@ -138,15 +138,19 @@ def get_statarb_data():
     stats = {
         'total_trades'    : len(pnl_list),
         'win_rate'        : round(len(wins) / len(pnl_list) * 100, 1) if pnl_list else 0,
-        # Somme des rendements % de chaque trade, calculés sur le notionnel
-        # exposé par trade (~$100 : 50$ AAVE + 50$ ETH) — PAS sur le capital
-        # total du compte. Utile pour juger la qualité de la stratégie
-        # indépendamment de la taille du compte, mais ne pas confondre avec
-        # le rendement réel du portefeuille (voir 'portfolio_return_pct').
+        # ⚠️ GROSS, sans frais ni funding rate — indicateur de qualité du
+        # signal (Z-score/ML), PAS une mesure de rentabilité réelle. Pour
+        # la vraie rentabilité, voir 'cumulative_pnl_net_usd' ci-dessous.
         'cumulative_trade_pnl': round(sum(pnl_list) * 100, 2) if pnl_list else 0,
         'avg_pnl'         : round(sum(pnl_list) / len(pnl_list) * 100, 3) if pnl_list else 0,
         'win_count'       : len(win_trades),
         'loss_count'      : len(loss_trades),
+        # ✅ Le chiffre à croire : somme des vrais PnL nets par trade
+        # (natif Binance quand dispo, sinon fallback théorique + frais
+        # réels) — inclut frais ET funding rate, contrairement au-dessus.
+        'cumulative_pnl_net_usd': round(
+            sum(t['pnl_usdt_net'] for t in all_exits if t.get('pnl_usdt_net') is not None), 4
+        ),
     }
 
     current = equity_raw[-1] if equity_raw else {
@@ -154,16 +158,34 @@ def get_statarb_data():
     }
     current = dict(current)  # copie — on va remplacer equity_usdt affiché
 
-    chart_labels, chart_values = [], []
+    # ── Courbe basée sur le VRAI PnL par trade (natif Binance / fallback) ──
+    # Avant : la partie "réalisée" de la courbe était inférée depuis
+    # live_equity (dernier unrealized_pnl_usdt connu juste avant un retour
+    # à FLAT) — un calcul théorique (gross, avant frais/funding rate).
+    # Depuis la migration native (11/09), live_trades.pnl_usdt_net contient
+    # le VRAI chiffre par trade (natif Binance si dispo, sinon fallback
+    # théorique + frais réels). On l'utilise maintenant comme source
+    # d'autorité pour la partie réalisée — la latente reste théorique
+    # (inévitable tant que la position n'est pas clôturée).
     capital_reference = round(equity_raw[0].get('equity_usdt', 0), 2) if equity_raw else 0
-    synthetic_values = build_synthetic_equity(
-        equity_raw, capital_reference,
-        current_contrib_fn=lambda row: row.get('unrealized_pnl_usdt', 0) or 0
+    exit_pnls = sorted(
+        [(t['timestamp'], t['pnl_usdt_net']) for t in all_exits
+         if t.get('pnl_usdt_net') is not None],
+        key=lambda x: x[0]
     )
+    chart_labels, chart_values = [], []
+    realized_cum = 0.0
+    exit_idx = 0
     for e in equity_raw:
         ts = e.get('timestamp', '')
+        while exit_idx < len(exit_pnls) and exit_pnls[exit_idx][0] <= ts:
+            realized_cum += exit_pnls[exit_idx][1]
+            exit_idx += 1
+        status  = e.get('position_status', 'FLAT') or 'FLAT'
+        contrib = (e.get('unrealized_pnl_usdt', 0) or 0) if status != 'FLAT' else 0.0
+        chart_values.append(round(capital_reference + realized_cum + contrib, 2))
         chart_labels.append(ts[5:16] if len(ts) > 15 else ts)
-    chart_values = synthetic_values
+
     if chart_values:
         current['equity_usdt'] = chart_values[-1]  # cohérent avec la courbe —
                                                      # sinon la carte "Capital"
@@ -183,6 +205,8 @@ def get_statarb_data():
     return {
         'trades': trades, 'stats': stats, 'current': current,
         'chart_labels': chart_labels, 'chart_values': chart_values,
+        'capital_reference': capital_reference,
+        'own_contribution': round((chart_values[-1] - capital_reference), 2) if chart_values else 0.0,
     }
 
 
@@ -226,6 +250,8 @@ def get_funding_data():
     return {
         'trades': trades, 'stats': stats, 'current': current,
         'chart_labels': chart_labels, 'chart_values': chart_values,
+        'capital_reference': capital_reference,
+        'own_contribution': round((chart_values[-1] - capital_reference), 2) if chart_values else 0.0,
     }
 
 
@@ -261,9 +287,18 @@ def index():
     regime = regime_data[0] if regime_data else None
     regime_dist = get_regime_distribution()
 
-    # ── Résumé global (somme des deux stratégies) ─────────────
-    global_capital = (statarb['current'].get('equity_usdt') or 0) + \
-                      (funding['current'].get('equity_usdt') or 0)
+    # ── Résumé global ──────────────────────────────────────────
+    # ⚠️ StatArb et Funding tradent tous les deux sur le MÊME wallet
+    # Futures USDⓈ-M partagé — additionner leurs deux 'equity_usdt' comptait
+    # deux fois le même capital de départ (bug trouvé le 11/09). Le bon
+    # calcul : UNE seule référence de capital (celle de StatArb, arbitraire
+    # mais les deux pointent vers le même wallet donc quasi identiques au
+    # démarrage) + la contribution $ propre de CHAQUE stratégie (son propre
+    # P&L réalisé+latent, pas son "total" qui inclut déjà la référence).
+    shared_capital_reference = statarb.get('capital_reference', 0) or 0
+    global_capital = (shared_capital_reference
+                       + statarb.get('own_contribution', 0)
+                       + funding.get('own_contribution', 0))
 
     return render_template('index.html',
         regime=regime,
