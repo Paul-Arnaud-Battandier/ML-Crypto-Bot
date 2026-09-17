@@ -17,10 +17,47 @@ import json
 import os
 import sys
 import time
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
+
+# ── Détection de ban Binance robuste (même fix que select_pair.py, 14/09) ──
+# ccxt classe l'erreur -1003 en RateLimitExceeded, pas DDoSProtection —
+# notre ancien `except ccxt.DDoSProtection` ne l'attrapait jamais.
+_RATE_LIMIT_EXC_TYPES = tuple(
+    cls for cls in (
+        getattr(ccxt, 'DDoSProtection', None),
+        getattr(ccxt, 'RateLimitExceeded', None),
+    ) if cls is not None
+)
+
+def _is_rate_limit_error(exc):
+    if isinstance(exc, _RATE_LIMIT_EXC_TYPES):
+        return True
+    msg = str(exc)
+    return '-1003' in msg or 'Way too many requests' in msg or 'banned until' in msg
+
+def _extract_ban_until_ms(exc):
+    m = re.search(r'banned until (\d+)', str(exc))
+    return int(m.group(1)) if m else None
+
+def _wait_out_ban(exc, max_wait_seconds=420):
+    """Attend l'expiration du ban plutôt que d'abandonner le scan (plafonné
+    pour rester sous le timeout du subprocess, 600s dans background_jobs.py)."""
+    ban_until_ms = _extract_ban_until_ms(exc)
+    if ban_until_ms is None:
+        return False
+    wait_s = (ban_until_ms / 1000) - time.time() + 2
+    if wait_s <= 0:
+        return True
+    if wait_s > max_wait_seconds:
+        print(f"    ⏳ Ban trop long ({wait_s:.0f}s > {max_wait_seconds}s max) — abandon pour cette exécution.")
+        return False
+    print(f"    ⏳ Ban Binance détecté — attente de {wait_s:.0f}s avant de reprendre...")
+    time.sleep(wait_s)
+    return True
 
 # ── Chemins ───────────────────────────────────────────────────
 ROOT_DIR          = Path(__file__).parent.parent
@@ -78,13 +115,10 @@ def fetch_funding_data(exchange, symbol, days=30):
         current_rate = current.get('fundingRate', None)
 
         return rates, current_rate
-    except ccxt.DDoSProtection as e:
-        # Ban IP Binance (418/-1003) — on arrête le scan proprement plutôt
-        # que de continuer à taper sur une IP déjà bannie (ça prolongerait
-        # potentiellement le ban) et on garde les résultats déjà obtenus.
-        print(f"    🚫 {symbol}: rate-limit/ban Binance détecté — arrêt du scan pour cette exécution ({e})")
-        raise
     except Exception as e:
+        if _is_rate_limit_error(e):
+            print(f"    🚫 {symbol}: rate-limit/ban Binance détecté ({e})")
+            raise
         print(f"    ⚠️  {symbol}: {e}")
         return None, None
 
@@ -142,17 +176,22 @@ def get_best_funding(verbose=True):
         print("=" * 60)
 
     results = []
-    banned = False
-    for sym in UNIVERSE:
-        if banned:
-            break
+    remaining = list(UNIVERSE)
+    while remaining:
+        sym = remaining[0]
         time.sleep(API_CALL_DELAY)  # Espace les appels pour éviter de dépasser le rate-limit weight
         try:
             rates, current_rate = fetch_funding_data(exchange, sym)
-        except ccxt.DDoSProtection:
-            banned = True
-            break
+        except Exception as e:
+            if _is_rate_limit_error(e):
+                if _wait_out_ban(e):
+                    continue  # on retente CE symbole après l'attente
+                print("\n🚫 Scan interrompu à cause d'un ban/rate-limit Binance trop long — "
+                      "résultat basé uniquement sur les symboles déjà scannés avant le ban.")
+                break
+            raise
         if rates is None or current_rate is None:
+            remaining.pop(0)
             continue
 
         avg_rate     = np.mean(rates)
@@ -181,10 +220,7 @@ def get_best_funding(verbose=True):
                   f"Actuel: {current_apr:>7.2f}% | "
                   f"Positif: {positive_pct:.0f}% | "
                   f"Breakeven: {breakeven:.0f}j")
-
-    if banned:
-        print("\n🚫 Scan interrompu à cause d'un ban/rate-limit Binance — "
-              "résultat basé uniquement sur les symboles déjà scannés avant le ban.")
+        remaining.pop(0)
 
     if not results:
         print("❌ Aucune donnée récupérée")

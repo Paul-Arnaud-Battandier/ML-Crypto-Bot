@@ -11,6 +11,7 @@ Peut être appelé :
 """
 
 import time
+import re
 import sys
 import ccxt
 import pandas as pd
@@ -21,6 +22,52 @@ from pathlib import Path
 from statsmodels.tsa.stattools import coint, adfuller
 from statsmodels.regression.linear_model import OLS
 from statsmodels.tools import add_constant
+
+# ── Détection de ban Binance robuste ────────────────────────────
+# Découverte le 14/09 : ccxt classe l'erreur -1003 "Way too many requests"
+# en ccxt.RateLimitExceeded, PAS ccxt.DDoSProtection comme on le supposait.
+# Le except ccxt.DDoSProtection ne l'attrapait donc jamais, et le scan
+# continuait à taper sur chaque symbole restant malgré le ban — d'où le
+# "Scan paire obsolète (17.8j)" jamais résolu. On vérifie maintenant sur
+# PLUSIEURS classes ccxt + le contenu du message, pour ne plus dépendre
+# d'une taxonomie d'exception qu'on ne maîtrise pas parfaitement.
+_RATE_LIMIT_EXC_TYPES = tuple(
+    cls for cls in (
+        getattr(ccxt, 'DDoSProtection', None),
+        getattr(ccxt, 'RateLimitExceeded', None),
+    ) if cls is not None
+)
+
+def _is_rate_limit_error(exc):
+    if isinstance(exc, _RATE_LIMIT_EXC_TYPES):
+        return True
+    msg = str(exc)
+    return '-1003' in msg or 'Way too many requests' in msg or 'banned until' in msg
+
+def _extract_ban_until_ms(exc):
+    m = re.search(r'banned until (\d+)', str(exc))
+    return int(m.group(1)) if m else None
+
+def _wait_out_ban(exc, max_wait_seconds=420):
+    """
+    Attend que le ban expire (annoncé dans le message d'erreur lui-même)
+    plutôt que d'abandonner tout le scan pour la semaine suivante.
+    Plafonné à 420s pour rester dans le timeout du subprocess (600s,
+    configuré dans background_jobs.py) avec une marge de sécurité.
+    Retourne True si on a attendu et qu'on peut retenter, False sinon.
+    """
+    ban_until_ms = _extract_ban_until_ms(exc)
+    if ban_until_ms is None:
+        return False
+    wait_s = (ban_until_ms / 1000) - time.time() + 2  # +2s de marge
+    if wait_s <= 0:
+        return True  # déjà expiré
+    if wait_s > max_wait_seconds:
+        print(f"    ⏳ Ban trop long ({wait_s:.0f}s > {max_wait_seconds}s max) — abandon pour cette exécution.")
+        return False
+    print(f"    ⏳ Ban Binance détecté — attente de {wait_s:.0f}s avant de reprendre...")
+    time.sleep(wait_s)
+    return True
 
 # ── Chemins ───────────────────────────────────────────────────
 ROOT_DIR      = Path(__file__).parent.parent
@@ -80,10 +127,10 @@ def fetch_close(symbol, timeframe=TIMEFRAME, days=DAYS):
             if ohlcv[-1][0] >= int(datetime.now().timestamp()*1000) - tf_ms.get(timeframe, 3600*1000):
                 break
             time.sleep(API_CALL_DELAY)  # entre chaque page de résultats du MÊME symbole
-        except ccxt.DDoSProtection as e:
-            print(f'    🚫 {symbol}: rate-limit/ban Binance détecté — arrêt pour ce symbole ({e})')
-            raise
         except Exception as e:
+            if _is_rate_limit_error(e):
+                print(f'    🚫 {symbol}: rate-limit/ban Binance détecté — arrêt pour ce symbole ({e})')
+                raise
             print(f'    ⚠️ {symbol}: {e}')
             break
     if not all_ohlcv:
@@ -226,25 +273,26 @@ def get_best_pair(verbose=True):
     # 1. Téléchargement
     all_symbols = list(set([s for pair in CANDIDATE_PAIRS for s in pair]))
     prices      = {}
-    banned      = False
 
     if verbose:
         print("\n📥 Téléchargement des données...")
-    for sym in all_symbols:
-        if banned:
-            break
+    remaining = list(all_symbols)
+    while remaining:
+        sym = remaining[0]
         time.sleep(API_CALL_DELAY)  # Espace les appels pour éviter de dépasser le rate-limit weight
         try:
             df = fetch_close(sym)
-        except ccxt.DDoSProtection:
-            banned = True
-            break
+        except Exception as e:
+            if _is_rate_limit_error(e):
+                if _wait_out_ban(e):
+                    continue  # on retente CE symbole après l'attente
+                print("\n🚫 Scan interrompu à cause d'un ban/rate-limit Binance trop long — "
+                      "résultat basé uniquement sur les symboles déjà téléchargés avant le ban.")
+                break
+            raise
         if df is not None and len(df) > WINDOW * 3:
             prices[sym] = df
-
-    if banned:
-        print("\n🚫 Scan interrompu à cause d'un ban/rate-limit Binance — "
-              "résultat basé uniquement sur les symboles déjà téléchargés avant le ban.")
+        remaining.pop(0)
 
     # 2. Scan
     if verbose:
