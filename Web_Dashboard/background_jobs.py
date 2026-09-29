@@ -41,8 +41,9 @@ from state_store import get_state, set_state
 # ── Chemins vers les scripts ────────────────────────────────────
 STATARB_SCRIPT        = ROOT_DIR / "StatArb_ETH_15m"    / "scripts" / "live_bot.py"
 FUNDING_SCRIPT         = ROOT_DIR / "FundingCarry_Multi" / "scripts" / "live_funding_bot.py"
-SELECT_PAIR_SCRIPT     = ROOT_DIR / "Regime_Detector"    / "scripts" / "select_pair.py"
-SELECT_FUNDING_SCRIPT  = ROOT_DIR / "FundingCarry_Multi" / "scripts" / "select_funding_pair.py"
+# select_pair.py / select_funding_pair.py tournent désormais sur GitHub
+# Actions (voir .github/workflows/statarb_rescan.yml et funding_rescan.yml)
+# — plus lancés depuis Render.
 
 # Verrou global : empêche DEUX subprocess de tourner en même temps, peu
 # importe le calage horaire. Le crash du 01/09 est arrivé parce que le
@@ -196,60 +197,25 @@ def funding_loop():
         run_subprocess(FUNDING_SCRIPT, "Funding cycle")
 
 
-def _seconds_until_next_daily_time(hour, minute, buffer_seconds=5):
-    """Secondes jusqu'au prochain HH:MM local (aujourd'hui ou demain)."""
-    from datetime import timedelta
-    now = datetime.now()
-    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if target <= now:
-        target += timedelta(days=1)
-    return (target - now).total_seconds() + buffer_seconds
-
-
-def _seconds_until_next_weekly_time(weekday, hour, minute, buffer_seconds=5):
-    """Secondes jusqu'au prochain jour de semaine (0=lundi) à HH:MM local."""
-    from datetime import timedelta
-    now = datetime.now()
-    days_ahead = (weekday - now.weekday()) % 7
-    target = (now + timedelta(days=days_ahead)).replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if target <= now:
-        target += timedelta(days=7)
-    return (target - now).total_seconds() + buffer_seconds
-
-
-def statarb_rescan_loop():
-    """Relance le scan de cointégration chaque lundi à 04:07 (heure fixe,
-    creuse, décalée de 15min pour ne jamais tomber pile sur un scan
-    StatArb même si le timing dérive légèrement)."""
-    while True:
-        wait = _seconds_until_next_weekly_time(weekday=0, hour=4, minute=7)
-        time.sleep(wait)
-        print("[BG] 🔄 Rescan StatArb hebdomadaire...")
-        run_subprocess(SELECT_PAIR_SCRIPT, "select_pair.py", timeout=600)
-
-
-def funding_rescan_loop():
-    """Relance le scan de sélection funding chaque jour à 04:22 (heure fixe,
-    creuse, décalée du rescan StatArb pour éviter tout chevauchement)."""
-    while True:
-        wait = _seconds_until_next_daily_time(hour=4, minute=22)
-        time.sleep(wait)
-        print("[BG] 🔄 Rescan Funding quotidien...")
-        run_subprocess(SELECT_FUNDING_SCRIPT, "select_funding_pair.py", timeout=600)
-
-
 def start_background_jobs():
     """
-    Démarre les 4 boucles en threads daemon (non-bloquant). Ces threads
-    ne font QUE dormir puis lancer un subprocess.run() — ils ne chargent
-    eux-mêmes aucune lib lourde (pandas/ccxt/lightgbm), donc leur
-    empreinte mémoire propre est négligeable.
-    Le régime tourne toujours sur GitHub Actions (Kraken, non bloqué),
-    donc pas relancé ici.
+    Démarre les 2 boucles de trading en threads daemon (non-bloquant).
+    Ces threads ne font QUE dormir puis lancer un subprocess.run() — ils
+    ne chargent eux-mêmes aucune lib lourde (pandas/ccxt/lightgbm), donc
+    leur empreinte mémoire propre est négligeable.
+
+    Les rescans (StatArb hebdo, Funding quotidien) et le régime tournent
+    maintenant sur GitHub Actions, pas ici — découvert le 21-28/09 : l'IP
+    partagée de Render se fait bannir par Binance sur des durées allant
+    jusqu'à 27h (probablement à cause du trafic cumulé d'autres clients
+    Render sur la même IP), rendant le rescan sur Render structurellement
+    peu fiable. Les runners GitHub Actions utilisent un pool d'IP différent
+    et rotatif, et ces 2 scripts n'appellent que des données PUBLIQUES
+    (pas l'API Demo Trading authentifiée, géo-bloquée elle — c'est
+    uniquement pour ça que les bots de trading eux-mêmes restent sur
+    Render).
     """
-    threading.Thread(target=statarb_loop,       daemon=True, name="statarb_thread").start()
-    threading.Thread(target=funding_loop,        daemon=True, name="funding_thread").start()
-    threading.Thread(target=statarb_rescan_loop, daemon=True, name="statarb_rescan_thread").start()
-    threading.Thread(target=funding_rescan_loop, daemon=True, name="funding_rescan_thread").start()
-    print("[BG] ✅ Threads de fond lancés (statarb[15min] + funding[8h] + rescans)")
-    print("[BG] ℹ️  Régime calculé sur GitHub Actions (cron horaire, Kraken)")
+    threading.Thread(target=statarb_loop, daemon=True, name="statarb_thread").start()
+    threading.Thread(target=funding_loop, daemon=True, name="funding_thread").start()
+    print("[BG] ✅ Threads de fond lancés (statarb[15min] + funding[8h])")
+    print("[BG] ℹ️  Régime + rescans (StatArb hebdo, Funding quotidien) sur GitHub Actions")
