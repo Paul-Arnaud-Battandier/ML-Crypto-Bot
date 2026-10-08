@@ -127,22 +127,35 @@ def get_statarb_data():
     trades     = sb_get('live_trades', 'order=id.desc&limit=20')
 
     all_exits = sb_get_all('live_trades', 'action=eq.EXIT&order=id.asc')
-    pnl_list  = [t['pnl_pct'] for t in all_exits if t.get('pnl_pct') is not None]
-    wins      = [p for p in pnl_list if p > 0]
-    # Wins/Losses basés sur le vrai P&L, pas sur le nom du déclencheur de sortie —
-    # un exit "SIGNAL_EXIT" (Z revenu à 0) peut être perdant après frais/hedge imparfait,
-    # et ce n'est pas pour autant un Stop-Loss (les seuils SL ne se sont pas déclenchés).
-    win_trades  = [p for p in pnl_list if p > 0]
-    loss_trades = [p for p in pnl_list if p <= 0]
+    pnl_list  = [t['pnl_pct'] for t in all_exits if t.get('pnl_pct') is not None]  # BRUT (prix seul)
+
+    # Win/Loss : basé sur le PnL NET en $ (pnl_usdt_net : natif Binance, frais
+    # et funding rate inclus) quand il existe — sinon repli sur le brut pour
+    # les éventuelles lignes plus anciennes sans cette colonne. Avant, un
+    # trade "gagnant" en brut pouvait en réalité perdre de l'argent une fois
+    # les coûts réels déduits, ce qui gonflait le win rate affiché.
+    outcomes = []
+    for t in all_exits:
+        net = t.get('pnl_usdt_net')
+        if net is not None:
+            outcomes.append(net)
+        elif t.get('pnl_pct') is not None:
+            outcomes.append(t['pnl_pct'])   # repli : seul le signe compte ici
+    win_trades  = [o for o in outcomes if o > 0]
+    loss_trades = [o for o in outcomes if o <= 0]
+    wins        = win_trades
+
+    net_list = [t['pnl_usdt_net'] for t in all_exits if t.get('pnl_usdt_net') is not None]
 
     stats = {
-        'total_trades'    : len(pnl_list),
-        'win_rate'        : round(len(wins) / len(pnl_list) * 100, 1) if pnl_list else 0,
+        'total_trades'    : len(outcomes),
+        'win_rate'        : round(len(wins) / len(outcomes) * 100, 1) if outcomes else 0,
         # ⚠️ GROSS, sans frais ni funding rate — indicateur de qualité du
         # signal (Z-score/ML), PAS une mesure de rentabilité réelle. Pour
         # la vraie rentabilité, voir 'cumulative_pnl_net_usd' ci-dessous.
         'cumulative_trade_pnl': round(sum(pnl_list) * 100, 2) if pnl_list else 0,
         'avg_pnl'         : round(sum(pnl_list) / len(pnl_list) * 100, 3) if pnl_list else 0,
+        'avg_pnl_net_usd' : round(sum(net_list) / len(net_list), 4) if net_list else 0,
         'win_count'       : len(win_trades),
         'loss_count'      : len(loss_trades),
         # ✅ Le chiffre à croire : somme des vrais PnL nets par trade
