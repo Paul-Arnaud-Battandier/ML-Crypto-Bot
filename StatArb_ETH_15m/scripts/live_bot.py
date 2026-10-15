@@ -54,6 +54,13 @@ TIME_LIMIT       = 192    # Stop-Loss temporel : 48h max (192 bougies de 15m)
 DEFAULT_SYM1 = 'AAVE/USDT'
 DEFAULT_SYM2 = 'ETH/USDT'
 
+# Rotation de paire désactivée tant que le modèle ML n'est pas ré-entraîné par
+# paire : lgbm_statarb.pkl a (très probablement) été entraîné sur AAVE/ETH
+# uniquement. Si le scan élisait une autre paire, le bot la tradrait avec un
+# modèle qui ne l'a jamais vue. Tant que c'est False, le scan sert seulement
+# d'indicateur de santé (voir main()) — à repasser à True APRÈS ré-entraînement.
+PAIR_ROTATION_ENABLED = False
+
 # Variables globales — mises à jour dans main() selon le régime
 SYM1 = DEFAULT_SYM1
 SYM2 = DEFAULT_SYM2
@@ -561,13 +568,32 @@ def main():
     regime    = read_regime()
     best_pair = read_best_pair()
 
-    if best_pair and best_pair.get('valid'):
+    if PAIR_ROTATION_ENABLED and best_pair and best_pair.get('valid'):
         SYM1 = best_pair['sym1']
         SYM2 = best_pair['sym2']
         print(f"📊 Paire sélectionnée : {SYM1} / {SYM2} (score={best_pair['score']})")
     else:
         SYM1, SYM2 = DEFAULT_SYM1, DEFAULT_SYM2
-        print(f"📊 Paire par défaut   : {SYM1} / {SYM2}")
+        print(f"📊 Paire par défaut   : {SYM1} / {SYM2}"
+              f"{' (rotation désactivée)' if not PAIR_ROTATION_ENABLED else ''}")
+        try:
+            if (best_pair and best_pair.get('valid')
+                    and (best_pair['sym1'], best_pair['sym2']) != (DEFAULT_SYM1, DEFAULT_SYM2)):
+                print(f"   ℹ️  Le scan recommande {best_pair['sym1']} / {best_pair['sym2']} "
+                      f"(score={best_pair['score']}) — ignoré, modèle ML propre à {DEFAULT_SYM1}/{DEFAULT_SYM2}")
+            # Santé de la paire réellement tradée, d'après le dernier scan
+            scan_all = get_state('pair_scan_all')
+            if scan_all:
+                mine = next((r for r in scan_all.get('results', [])
+                             if (r.get('sym1'), r.get('sym2')) == (DEFAULT_SYM1, DEFAULT_SYM2)), None)
+                if mine:
+                    flag = "  ⚠️ cointégration dégradée" if (mine.get('coint_pvalue') or 0) > 0.10 else ""
+                    print(f"   🩺 Santé {DEFAULT_SYM1}/{DEFAULT_SYM2} (scan {scan_all.get('updated')}, "
+                          f"{scan_all.get('window_days')}j, {scan_all.get('source')}) : "
+                          f"score={mine.get('score')} coint_p={mine.get('coint_pvalue')} "
+                          f"hurst={mine.get('hurst')}{flag}")
+        except Exception as e:
+            print(f"   (suivi de santé de la paire indisponible : {e})")
 
     if regime:
         emoji = {'MEAN_REV':'🟢','TRENDING':'🟡','HIGH_VOL':'🔴','NEUTRAL':'⚪'}

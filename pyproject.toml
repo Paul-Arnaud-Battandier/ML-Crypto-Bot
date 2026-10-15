@@ -1,0 +1,19 @@
+[project]
+name = "ml-crypto-bot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Paul-Arnaud-Battandier", email = "paul.arnaudbattandier@edu.ece.fr" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "ccxt>=4.5.87",
+]
+
+[project.scripts]
+ml-crypto-bot = "ml_crypto_bot:main"
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"

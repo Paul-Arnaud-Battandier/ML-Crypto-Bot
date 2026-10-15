@@ -23,14 +23,12 @@ from statsmodels.tsa.stattools import coint, adfuller
 from statsmodels.regression.linear_model import OLS
 from statsmodels.tools import add_constant
 
-# ── Détection de ban Binance robuste ────────────────────────────
-# Découverte le 14/09 : ccxt classe l'erreur -1003 "Way too many requests"
-# en ccxt.RateLimitExceeded, PAS ccxt.DDoSProtection comme on le supposait.
-# Le except ccxt.DDoSProtection ne l'attrapait donc jamais, et le scan
-# continuait à taper sur chaque symbole restant malgré le ban — d'où le
-# "Scan paire obsolète (17.8j)" jamais résolu. On vérifie maintenant sur
-# PLUSIEURS classes ccxt + le contenu du message, pour ne plus dépendre
-# d'une taxonomie d'exception qu'on ne maîtrise pas parfaitement.
+# ── Gestion du rate-limit (Kraken) ─────────────────────────────
+# Ce scan lit maintenant ses prix sur KRAKEN (migration du 13/10) : l'IP de
+# Render se faisait bannir par Binance pendant des heures (jusqu'à 27h) et
+# les runners GitHub étaient géo-bloqués (451). Les prix ne servent qu'à
+# tester la cointégration : n'importe quel exchange liquide convient (les
+# symboles renvoyés restent au format Binance pour le bot).
 _RATE_LIMIT_EXC_TYPES = tuple(
     cls for cls in (
         getattr(ccxt, 'DDoSProtection', None),
@@ -41,33 +39,12 @@ _RATE_LIMIT_EXC_TYPES = tuple(
 def _is_rate_limit_error(exc):
     if isinstance(exc, _RATE_LIMIT_EXC_TYPES):
         return True
-    msg = str(exc)
-    return '-1003' in msg or 'Way too many requests' in msg or 'banned until' in msg
+    msg = str(exc).lower()
+    return ('rate limit' in msg or 'too many requests' in msg
+            or '-1003' in msg or 'banned until' in msg)
 
-def _extract_ban_until_ms(exc):
-    m = re.search(r'banned until (\d+)', str(exc))
-    return int(m.group(1)) if m else None
-
-def _wait_out_ban(exc, max_wait_seconds=420):
-    """
-    Attend que le ban expire (annoncé dans le message d'erreur lui-même)
-    plutôt que d'abandonner tout le scan pour la semaine suivante.
-    Plafonné à 420s pour rester dans le timeout du subprocess (600s,
-    configuré dans background_jobs.py) avec une marge de sécurité.
-    Retourne True si on a attendu et qu'on peut retenter, False sinon.
-    """
-    ban_until_ms = _extract_ban_until_ms(exc)
-    if ban_until_ms is None:
-        return False
-    wait_s = (ban_until_ms / 1000) - time.time() + 2  # +2s de marge
-    if wait_s <= 0:
-        return True  # déjà expiré
-    if wait_s > max_wait_seconds:
-        print(f"    ⏳ Ban trop long ({wait_s:.0f}s > {max_wait_seconds}s max) — abandon pour cette exécution.")
-        return False
-    print(f"    ⏳ Ban Binance détecté — attente de {wait_s:.0f}s avant de reprendre...")
-    time.sleep(wait_s)
-    return True
+MAX_ATTEMPTS_PER_SYMBOL = 3
+BACKOFF_SECONDS         = 20   # 20s, 40s, 60s : très en dessous du timeout subprocess (600s)
 
 # ── Chemins ───────────────────────────────────────────────────
 ROOT_DIR      = Path(__file__).parent.parent
@@ -81,17 +58,26 @@ DATA_DIR.mkdir(exist_ok=True)
 BEST_PAIR_FILE = DATA_DIR / "best_pair.json"
 
 # ── Configuration ─────────────────────────────────────────────
-DAYS      = 90    # Fenêtre de 90j (évite faux positifs bull run)
+# Kraken ne renvoie que ~720 bougies par requête : en 1h ça fait ~30 jours
+# (vérifié le 13/10 avec check_kraken_pairs.py : 721 bougies). Avant, 90j sur
+# Binance. Conséquences assumées :
+#   - stats (coint, Hurst, ADF OOS) sur 3x moins de données -> scores plus
+#     bruités ; acceptable tant que le scan sert d'indicateur de santé
+#     (PAIR_ROTATION_ENABLED=False dans live_bot.py), pas de décideur ;
+#   - seuils de zero-crossings (calés sur 90j) mis à l'échelle par ZC_SCALE.
+DAYS      = 30
 TIMEFRAME = '1h'  # 1h = meilleur compromis signal/bruit
 WINDOW    = 50    # Rolling OLS window
+ZC_SCALE  = DAYS / 90.0
 
-# Délai entre appels API — augmenté de 0.5s à 1.2s suite au ban IP Binance
-# constaté sur select_funding_pair.py le 04/09 (erreur 418 / -1003 "Way too
-# many requests"). Même cause possible ici : 11 paires candidates, jusqu'à
-# 2 symboles chacune, requêtes trop rapprochées malgré enableRateLimit=True.
-API_CALL_DELAY = 1.2
+API_CALL_DELAY = 1.2   # Kraken : limite publique ~1 req/s
 
-# Paires candidates avec logique économique
+# Quote préférée sur Kraken : USD d'abord (plus liquide), pour utiliser UNE
+# seule quote partout. Les symboles RESTENT au format Binance (XXX/USDT) dans
+# les résultats : c'est ce que live_bot.py utilise pour passer ses ordres.
+KRAKEN_QUOTE_PREFERENCE = ('USD', 'USDT')
+
+# Paires candidates (noms Binance). MATIC a été renommé POL.
 CANDIDATE_PAIRS = [
     ('AAVE/USDT', 'ETH/USDT'),   # DeFi vs sous-jacent ← référence
     ('UNI/USDT',  'ETH/USDT'),   # DEX vs ETH
@@ -103,7 +89,7 @@ CANDIDATE_PAIRS = [
     ('AVAX/USDT', 'ETH/USDT'),   # L1 vs ETH
     ('ETH/USDT',  'BTC/USDT'),   # Macro pair
     ('LDO/USDT',  'ETH/USDT'),   # Liquid staking vs ETH
-    ('MATIC/USDT','ETH/USDT'),   # L2 vs ETH
+    ('POL/USDT',  'ETH/USDT'),   # L2 vs ETH (ex-MATIC)
 ]
 
 # Seuils de qualité minimaux
@@ -111,28 +97,55 @@ MIN_SCORE       = 30   # Score minimum pour être sélectionnée
 MAX_HALF_LIFE_H = 72   # Half-life max en heures (3 jours)
 MIN_HALF_LIFE_H = 1    # Half-life min en heures
 
-# ── Data ──────────────────────────────────────────────────────
+# ── Data (Kraken) ─────────────────────────────────────────────
+_exchange = None
+
+def _get_exchange():
+    """Instance Kraken unique, marchés chargés une seule fois."""
+    global _exchange
+    if _exchange is None:
+        _exchange = ccxt.kraken({'enableRateLimit': True})
+        _exchange.load_markets()
+    return _exchange
+
+def kraken_symbol(exchange, binance_style_symbol):
+    """'AAVE/USDT' (nom Binance) -> symbole Kraken ('AAVE/USD' en priorité,
+    sinon 'AAVE/USDT'). None si le token n'est pas listé."""
+    base = binance_style_symbol.split('/')[0]
+    for quote in KRAKEN_QUOTE_PREFERENCE:
+        candidate = f"{base}/{quote}"
+        if candidate in exchange.markets:
+            return candidate
+    return None
+
 def fetch_close(symbol, timeframe=TIMEFRAME, days=DAYS):
-    exchange = ccxt.binance({'enableRateLimit': True})
-    since    = int((datetime.now() - timedelta(days=days)).timestamp() * 1000)
+    """Prix de clôture 1h depuis Kraken. `symbol` au format Binance ; la
+    colonne du DataFrame garde ce nom pour que le reste du scan et le
+    résultat final restent au format attendu par live_bot.py."""
+    exchange = _get_exchange()
+    ksym = kraken_symbol(exchange, symbol)
+    if ksym is None:
+        print(f'    ⚠️ {symbol}: introuvable sur Kraken — ignoré')
+        return None
+    since = int((datetime.now() - timedelta(days=days)).timestamp() * 1000)
     all_ohlcv = []
+    tf_ms = {'15m': 15*60*1000, '1h': 3600*1000, '4h': 4*3600*1000}
     while True:
         try:
-            ohlcv = exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=1000)
-            if not ohlcv:
-                break
-            all_ohlcv.extend(ohlcv)
-            since = ohlcv[-1][0] + 1
-            tf_ms = {'15m': 15*60*1000, '1h': 3600*1000, '4h': 4*3600*1000}
-            if ohlcv[-1][0] >= int(datetime.now().timestamp()*1000) - tf_ms.get(timeframe, 3600*1000):
-                break
-            time.sleep(API_CALL_DELAY)  # entre chaque page de résultats du MÊME symbole
+            ohlcv = exchange.fetch_ohlcv(ksym, timeframe, since=since, limit=720)
         except Exception as e:
             if _is_rate_limit_error(e):
-                print(f'    🚫 {symbol}: rate-limit/ban Binance détecté — arrêt pour ce symbole ({e})')
+                print(f'    🚫 {symbol} ({ksym}): rate-limit Kraken ({e})')
                 raise
-            print(f'    ⚠️ {symbol}: {e}')
+            print(f'    ⚠️ {symbol} ({ksym}): {e}')
             break
+        if not ohlcv:
+            break
+        all_ohlcv.extend(ohlcv)
+        since = ohlcv[-1][0] + 1
+        if ohlcv[-1][0] >= int(datetime.now().timestamp()*1000) - tf_ms.get(timeframe, 3600*1000):
+            break
+        time.sleep(API_CALL_DELAY)
     if not all_ohlcv:
         return None
     df = pd.DataFrame(all_ohlcv, columns=['timestamp','open','high','low','close','volume'])
@@ -140,6 +153,7 @@ def fetch_close(symbol, timeframe=TIMEFRAME, days=DAYS):
     df = df.set_index('timestamp')[['close']]
     df = df[~df.index.duplicated(keep='first')]
     df.columns = [symbol]
+    print(f'    ✓ {symbol:<10} <- Kraken {ksym:<10} ({len(df)} bougies)')
     return df
 
 # ── Indicateurs ───────────────────────────────────────────────
@@ -249,9 +263,10 @@ def score_pair(res):
     elif 0  <  hl <= 72: score += 3
 
     # Zero-crossings (10 pts) — activité
-    if   res['zero_cross'] > 150: score += 10
-    elif res['zero_cross'] > 75:  score += 5
-    elif res['zero_cross'] > 30:  score += 2
+    # (seuils définis pour 90j, mis à l'échelle car la fenêtre est de 30j)
+    if   res['zero_cross'] > 150 * ZC_SCALE: score += 10
+    elif res['zero_cross'] > 75  * ZC_SCALE: score += 5
+    elif res['zero_cross'] > 30  * ZC_SCALE: score += 2
 
     return score
 
@@ -270,26 +285,33 @@ def get_best_pair(verbose=True):
         print(f"   Timeframe : {TIMEFRAME} | Fenêtre : {DAYS}j")
         print("="*60)
 
-    # 1. Téléchargement
+    # 1. Téléchargement (Kraken)
     all_symbols = list(set([s for pair in CANDIDATE_PAIRS for s in pair]))
     prices      = {}
 
     if verbose:
-        print("\n📥 Téléchargement des données...")
+        print("\n📥 Téléchargement des données (Kraken)...")
     remaining = list(all_symbols)
+    attempts  = {}
     while remaining:
         sym = remaining[0]
-        time.sleep(API_CALL_DELAY)  # Espace les appels pour éviter de dépasser le rate-limit weight
+        time.sleep(API_CALL_DELAY)
         try:
             df = fetch_close(sym)
         except Exception as e:
             if _is_rate_limit_error(e):
-                if _wait_out_ban(e):
-                    continue  # on retente CE symbole après l'attente
-                print("\n🚫 Scan interrompu à cause d'un ban/rate-limit Binance trop long — "
-                      "résultat basé uniquement sur les symboles déjà téléchargés avant le ban.")
+                attempts[sym] = attempts.get(sym, 0) + 1
+                if attempts[sym] < MAX_ATTEMPTS_PER_SYMBOL:
+                    wait = BACKOFF_SECONDS * attempts[sym]
+                    print(f"    ⏳ Rate-limit — attente {wait}s "
+                          f"(tentative {attempts[sym]}/{MAX_ATTEMPTS_PER_SYMBOL})")
+                    time.sleep(wait)
+                    continue  # on retente CE symbole
+                print("\n🚫 Scan interrompu : rate-limit persistant — résultat basé "
+                      "uniquement sur les symboles déjà téléchargés.")
                 break
-            raise
+            print(f"\n❌ Erreur inattendue pendant le téléchargement ({sym}) : {e}")
+            break
         if df is not None and len(df) > WINDOW * 3:
             prices[sym] = df
         remaining.pop(0)
@@ -342,6 +364,10 @@ def get_best_pair(verbose=True):
 
     # 5. Sauvegarde (Supabase — le fichier local ne survit pas aux redéploiements Render)
     set_state('best_pair', best)
+    # Détail de TOUTES les paires : le bot suit ainsi la santé de la paire qu'il
+    # trade réellement (AAVE/ETH), pas seulement celle de la meilleure.
+    set_state('pair_scan_all', {'updated': best['updated'], 'source': 'kraken',
+                                'window_days': DAYS, 'results': results})
 
     # 6. Affichage
     if verbose:

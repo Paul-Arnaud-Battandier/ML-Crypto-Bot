@@ -41,8 +41,11 @@ from state_store import get_state, set_state
 # ── Chemins vers les scripts ────────────────────────────────────
 STATARB_SCRIPT        = ROOT_DIR / "StatArb_ETH_15m"    / "scripts" / "live_bot.py"
 FUNDING_SCRIPT         = ROOT_DIR / "FundingCarry_Multi" / "scripts" / "live_funding_bot.py"
-SELECT_PAIR_SCRIPT     = ROOT_DIR / "Regime_Detector"    / "scripts" / "select_pair.py"
 SELECT_FUNDING_SCRIPT  = ROOT_DIR / "FundingCarry_Multi" / "scripts" / "select_funding_pair.py"
+# Le rescan StatArb (select_pair.py) n'est PLUS lancé d'ici : il lit ses prix
+# sur Kraken et tourne sur GitHub Actions (.github/workflows/statarb_rescan.yml),
+# seul environnement où Kraken est prouvé accessible (cf. Regime Detector).
+# Le rescan Funding reste ici : il lui faut les funding rates de BINANCE.
 # Retour sur Render après tentative GitHub Actions (28/09) : les scripts
 # publics (OHLCV, funding rate) sont AUSSI géo-bloqués (451) depuis les
 # runners GitHub, pas seulement l'API Demo authentifiée. Pas d'avantage
@@ -224,17 +227,6 @@ def _seconds_until_next_weekly_time(weekday, hour, minute, buffer_seconds=5):
     return (target - now).total_seconds() + buffer_seconds
 
 
-def statarb_rescan_loop():
-    """Relance le scan de cointégration chaque lundi à 04:07 (heure fixe,
-    creuse, décalée de 15min pour ne jamais tomber pile sur un scan
-    StatArb même si le timing dérive légèrement)."""
-    while True:
-        wait = _seconds_until_next_weekly_time(weekday=0, hour=4, minute=7)
-        time.sleep(wait)
-        print("[BG] 🔄 Rescan StatArb hebdomadaire...")
-        run_subprocess(SELECT_PAIR_SCRIPT, "select_pair.py", timeout=600)
-
-
 def funding_rescan_loop():
     """Relance le scan de sélection funding chaque jour à 04:22 (heure fixe,
     creuse, décalée du rescan StatArb pour éviter tout chevauchement)."""
@@ -247,7 +239,7 @@ def funding_rescan_loop():
 
 def start_background_jobs():
     """
-    Démarre les 4 boucles en threads daemon (non-bloquant). Ces threads
+    Démarre les 3 boucles en threads daemon (non-bloquant). Ces threads
     ne font QUE dormir puis lancer un subprocess.run() — ils ne chargent
     eux-mêmes aucune lib lourde (pandas/ccxt/lightgbm), donc leur
     empreinte mémoire propre est négligeable.
@@ -256,7 +248,6 @@ def start_background_jobs():
     """
     threading.Thread(target=statarb_loop,        daemon=True, name="statarb_thread").start()
     threading.Thread(target=funding_loop,         daemon=True, name="funding_thread").start()
-    threading.Thread(target=statarb_rescan_loop,  daemon=True, name="statarb_rescan_thread").start()
     threading.Thread(target=funding_rescan_loop,  daemon=True, name="funding_rescan_thread").start()
-    print("[BG] ✅ Threads de fond lancés (statarb[15min] + funding[8h] + rescans)")
-    print("[BG] ℹ️  Régime calculé sur GitHub Actions (Kraken, cron horaire)")
+    print("[BG] ✅ Threads de fond lancés (statarb[15min] + funding[8h] + rescan funding[quotidien])")
+    print("[BG] ℹ️  Régime + rescan StatArb sur GitHub Actions (Kraken, non bloqué là-bas)")
